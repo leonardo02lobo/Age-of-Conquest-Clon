@@ -45,6 +45,40 @@ public class Rules {
     /** Felicidad inicial de las provincias si el escenario no la especifica. */
     public double initialHappiness = 75.0;
 
+    // ------------------------------------------------ costes de las órdenes (M2)
+
+    /** Coste en AP de mover un ejército. */
+    public double apCostMove = 0.5;
+
+    /** Coste en AP de reclutar en una provincia. */
+    public double apCostRecruit = 0.5;
+
+    /** Coste en AP de fortificar una provincia (documentado del juego real: 0.5). */
+    public double apCostFortify = 0.5;
+
+    /** Coste en AP de declarar la guerra. */
+    public double apCostDeclareWar = 0.5;
+
+    /** Coste en oro de fortificar una provincia. */
+    public double goldCostFortify = 20.0;
+
+    /** Coste en oro por soldado reclutado. */
+    public double recruitGoldPerSoldier = 0.1;
+
+    /** Habitantes que consume cada soldado reclutado. */
+    public double recruitPopulationPerSoldier = 2.0;
+
+    // -------------------------------------------------------- reglas de partida
+
+    /**
+     * Fracción del territorio que se pierde al morir el rey (documentado del
+     * juego real: ~90%). Con 1.0 la muerte del rey elimina a la nación.
+     */
+    public double kingDeathTerritoryLoss = 0.9;
+
+    /** Límite de turnos de la partida; 0 = sin límite (gana el último en pie). */
+    public int maxTurns = 0;
+
     /** Puntos de acción disponibles para una nación con {@code provinceCount} provincias. */
     public double actionPointsFor(int provinceCount) {
         return apBase + apPerProvince * provinceCount;

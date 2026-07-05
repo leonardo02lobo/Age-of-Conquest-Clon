@@ -3,17 +3,37 @@ import map.ScenarioLoader;
 import model.GameState;
 import model.Nation;
 import model.Province;
+import ui.ConsoleGame;
 
 /**
  * Punto de entrada del clon de Age of Conquest.
- * Fase M1: carga un escenario y muestra el estado inicial de la partida.
+ * Carga un escenario, muestra el estado inicial y arranca una partida hotseat
+ * por consola (fase M2).
+ *
+ * Uso: java App [escenario.json] [--solo-resumen]
  */
 public class App {
 
     public static void main(String[] args) throws Exception {
-        Path scenario = Path.of(args.length > 0 ? args[0] : "scenarios/europa_antigua.json");
-        GameState state = ScenarioLoader.load(scenario);
+        Path scenarioPath = Path.of("scenarios/europa_antigua.json");
+        boolean summaryOnly = false;
+        for (String arg : args) {
+            if (arg.equals("--solo-resumen")) {
+                summaryOnly = true;
+            } else {
+                scenarioPath = Path.of(arg);
+            }
+        }
 
+        GameState state = ScenarioLoader.load(scenarioPath);
+        printSummary(state);
+
+        if (!summaryOnly) {
+            new ConsoleGame(state).run();
+        }
+    }
+
+    private static void printSummary(GameState state) {
         System.out.println("=== " + state.scenarioName() + " — turno " + state.turn() + " ===");
         System.out.println();
 
