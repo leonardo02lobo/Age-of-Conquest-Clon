@@ -79,6 +79,31 @@ public class GameState {
         return province(provinceA).adjacent().contains(province(provinceB).id());
     }
 
+    /**
+     * Provincias de tierra alcanzables en un movimiento desde {@code provinceId}:
+     * las adyacentes por tierra más las que están al otro lado de una única
+     * zona marítima compartida (viaje naval de un salto). Orden determinista.
+     */
+    public List<Province> reachableFrom(String provinceId) {
+        Province from = province(provinceId);
+        List<Province> result = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (String adjId : from.adjacent()) {
+            Province adj = province(adjId);
+            if (adj.isWater()) {
+                for (String coastId : adj.adjacent()) {
+                    Province coast = province(coastId);
+                    if (!coast.isWater() && !coastId.equals(from.id()) && seen.add(coastId)) {
+                        result.add(coast);
+                    }
+                }
+            } else if (seen.add(adjId)) {
+                result.add(adj);
+            }
+        }
+        return result;
+    }
+
     // -------------------------------------------------------------- naciones
 
     public Nation nation(String id) {

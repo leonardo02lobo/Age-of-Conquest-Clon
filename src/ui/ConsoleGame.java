@@ -1,5 +1,7 @@
 package ui;
 
+import ai.Agent;
+import ai.GreedyAgent;
 import engine.Order;
 import engine.OrderException;
 import engine.TurnEngine;
@@ -11,15 +13,18 @@ import model.Nation;
 import model.Province;
 
 /**
- * Partida por consola en modo hotseat: cada nación viva planifica sus órdenes
- * por turnos en el mismo teclado y el turno se resuelve al terminar todas.
- * (Hasta la fase M4 las naciones marcadas como IA también se controlan a mano.)
+ * Partida por consola: las naciones humanas planifican en modo hotseat con el
+ * teclado y las naciones marcadas como IA juegan solas con {@link GreedyAgent}.
  */
 public class ConsoleGame {
+
+    /** Tope de seguridad para partidas donde solo juegan IAs. */
+    private static final int MAX_CONSOLE_TURNS = 1000;
 
     private final TurnEngine engine;
     private final GameState state;
     private final Scanner in = new Scanner(System.in);
+    private final Agent aiAgent = new GreedyAgent();
 
     public ConsoleGame(GameState state) {
         this.state = state;
@@ -28,14 +33,17 @@ public class ConsoleGame {
 
     public void run() {
         System.out.println();
-        System.out.println("=== " + state.scenarioName() + " — partida hotseat ===");
+        System.out.println("=== " + state.scenarioName() + " — nueva partida ===");
         System.out.println("Escribe 'ayuda' para ver los comandos.");
 
-        while (!engine.isGameOver()) {
+        while (!engine.isGameOver() && state.turn() <= MAX_CONSOLE_TURNS) {
             System.out.println();
             System.out.println("──────── Turno " + state.turn() + " ────────");
             for (Nation nation : state.livingNations()) {
-                if (!planningPhase(nation)) {
+                if (nation.isAI()) {
+                    System.out.println("(IA) " + nation.name() + " planifica sus órdenes…");
+                    aiAgent.plan(engine, nation);
+                } else if (!planningPhase(nation)) {
                     System.out.println("Partida interrumpida.");
                     return;
                 }

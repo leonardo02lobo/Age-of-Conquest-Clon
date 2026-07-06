@@ -139,12 +139,8 @@ public class TurnEngine {
 
     /** Adyacencia directa por tierra, o un único mar compartido entre origen y destino. */
     private boolean isReachable(Province from, Province to) {
-        if (from.adjacent().contains(to.id())) {
-            return true;
-        }
-        for (String adjId : from.adjacent()) {
-            Province adj = state.province(adjId);
-            if (adj.isWater() && adj.adjacent().contains(to.id())) {
+        for (Province candidate : state.reachableFrom(from.id())) {
+            if (candidate.id().equals(to.id())) {
                 return true;
             }
         }

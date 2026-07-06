@@ -4,7 +4,7 @@ Clon del juego de estrategia por turnos *Age of Conquest IV* (Noble Master Games
 desarrollado como proyecto de **Simulación de Sistemas (UNET)**.
 El diseño completo, el análisis del juego original y la hoja de ruta están en [PLAN.md](PLAN.md).
 
-## Estado actual — fases M1, M2 y M3 completadas
+## Estado actual — fases M1 a M4 completadas
 
 - **M1 — Modelo de dominio** (`src/model/`): `Province` (provincias de tierra y zonas
   marítimas, población, felicidad, guarnición), `Nation` (oro, puntos de acción, rey,
@@ -30,13 +30,20 @@ El diseño completo, el análisis del juego original y la hoja de ruta están en
   reproducibles); temporada fiscal cada 5 turnos con tasas 0/50/100/150/200%;
   saqueo (población propia → oro) y decretos (repartir dinero, fiesta, festival
   de fertilidad).
+- **M4 — IA heurística** (`src/ai/GreedyAgent.java`): las naciones `ia: true` juegan
+  solas — ajustan impuestos según la felicidad media, decretan fiestas donde hay
+  descontento, atacan solo con ventaja ≥ 1.5× sobre la defensa efectiva, declaran
+  guerras oportunistas, mueven las tropas del interior hacia la frontera (BFS),
+  fortifican al rey y reclutan con el excedente. Umbrales públicos y calibrables;
+  IA determinista (el único azar de la partida son las revueltas).
 - **Escenario de prueba** (`scenarios/europa_antigua.json`): Europa antigua con
   23 provincias (18 de tierra + 5 marítimas), 4 naciones (Imperio Romano, Cartago,
   Galia, Grecia) y 4 provincias neutrales; Roma y Cartago empiezan en guerra.
-- **83 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor y
-  la economía.
+  Por defecto el humano lleva al Imperio Romano contra tres IA.
+- **92 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor,
+  la economía y la IA (incluida una partida completa IA vs IA reproducible).
 
-Próximas fases (ver PLAN.md §6): M4 IA, M5 simulación por lotes, M6 interfaz gráfica.
+Próximas fases (ver PLAN.md §6): M5 simulación por lotes, M6 interfaz gráfica.
 
 ## Estructura
 
@@ -45,7 +52,8 @@ src/
   model/       Estado puro de la simulación (sin dependencias de UI ni motor)
   map/         Carga y validación de escenarios JSON
   engine/      Motor WEGO: órdenes, validación, combate y resolución del turno
-  ui/          Partida por consola (hotseat)
+  ai/          Jugadores artificiales (interfaz Agent + GreedyAgent heurística)
+  ui/          Partida por consola (humanos en hotseat, naciones IA automáticas)
   App.java     Punto de entrada: resumen del escenario + partida por consola
 test/          Pruebas JUnit 5 (espejo de los paquetes de src)
 scenarios/     Escenarios en JSON
