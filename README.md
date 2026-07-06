@@ -4,7 +4,7 @@ Clon del juego de estrategia por turnos *Age of Conquest IV* (Noble Master Games
 desarrollado como proyecto de **Simulación de Sistemas (UNET)**.
 El diseño completo, el análisis del juego original y la hoja de ruta están en [PLAN.md](PLAN.md).
 
-## Estado actual — fases M1 a M4 completadas
+## Estado actual — fases M1 a M5 completadas
 
 - **M1 — Modelo de dominio** (`src/model/`): `Province` (provincias de tierra y zonas
   marítimas, población, felicidad, guarnición), `Nation` (oro, puntos de acción, rey,
@@ -40,10 +40,36 @@ El diseño completo, el análisis del juego original y la hoja de ruta están en
   23 provincias (18 de tierra + 5 marítimas), 4 naciones (Imperio Romano, Cartago,
   Galia, Grecia) y 4 provincias neutrales; Roma y Cartago empiezan en guerra.
   Por defecto el humano lleva al Imperio Romano contra tres IA.
-- **92 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor,
-  la economía y la IA (incluida una partida completa IA vs IA reproducible).
+- **M5 — Simulación por lotes** (`src/sim/`): `BatchRunner` juega N partidas
+  completas IA contra IA, cada una con su semilla y su configuración de `Rules`
+  (mismas semillas entre variantes → comparaciones apareadas); `sim.Simulacion`
+  trae 4 experimentos predefinidos, imprime el resumen estadístico y exporta
+  cada partida a `resultados/<experimento>.csv`.
+- **96 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor,
+  la economía, la IA y el runner por lotes.
 
-Próximas fases (ver PLAN.md §6): M5 simulación por lotes, M6 interfaz gráfica.
+Próximas fases (ver PLAN.md §6): M6 interfaz gráfica, M7 diplomacia avanzada.
+
+## Experimentos de simulación
+
+```bash
+java -cp "lib/gson-2.11.0.jar:bin" sim.Simulacion --experimento todos --n 100
+```
+
+| Experimento | Parámetro variado | Pregunta |
+|---|---|---|
+| `base` | (ninguno) | Distribución de duración y ganador con la config. de referencia |
+| `fortificacion` | `fortDefenseBonus` 0–1 | ¿Cuánto estabiliza o estanca la partida el bono defensivo? |
+| `desgaste` | `combatAttrition` φ 0.3–1 | Letalidad del combate: ¿guerras baratas o victorias pírricas? |
+| `revueltas` | `revoltRiskK` 0–1.6e-3 | Peso del componente estocástico (Monte Carlo) |
+
+Hallazgos con 100 partidas por variante (semillas 1000–1099, escenario Europa
+Antigua, ~3 s en total): la fortificación tiene un efecto fuertemente no lineal
+(con +100% la partida media pasa de 30 a 134 turnos y el ganador dominante
+cambia de Galia a Cartago); el desgaste φ decide el ganador (φ=0.5 → Grecia
+100%, φ≥0.7 → Galia ~99%); y sin revueltas (`revoltRiskK=0`) las 100 partidas
+son idénticas — confirmación de que las revueltas son la única fuente de azar
+del modelo.
 
 ## Estructura
 
