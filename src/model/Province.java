@@ -21,6 +21,7 @@ public class Province {
     private boolean fortified;
     private String ownerId;    // id de la nación dueña; null = neutral
     private int troops;        // guarnición actual (neutral o del dueño)
+    private int[] polygon;     // vértices [x1,y1, x2,y2, …] para la interfaz gráfica (opcional)
 
     public Province(String id, String name, boolean water) {
         if (id == null || id.isBlank()) {
@@ -109,6 +110,19 @@ public class Province {
 
     public void setTroops(int troops) {
         this.troops = Math.max(0, troops);
+    }
+
+    /** Vértices del polígono del mapa ([x1,y1, x2,y2, …]), o {@code null} si el escenario no los define. */
+    public int[] polygon() {
+        return polygon;
+    }
+
+    public void setPolygon(int[] polygon) {
+        if (polygon != null && (polygon.length < 6 || polygon.length % 2 != 0)) {
+            throw new IllegalArgumentException(
+                    "El polígono de '" + id + "' necesita una lista par de al menos 6 coordenadas");
+        }
+        this.polygon = polygon;
     }
 
     @Override

@@ -119,6 +119,19 @@ public final class ScenarioLoader {
             }
             p.setTroops(troops);
 
+            if (obj.has("poligono")) {
+                JsonArray coords = obj.getAsJsonArray("poligono");
+                int[] polygon = new int[coords.size()];
+                for (int i = 0; i < coords.size(); i++) {
+                    polygon[i] = coords.get(i).getAsInt();
+                }
+                try {
+                    p.setPolygon(polygon);
+                } catch (IllegalArgumentException e) {
+                    throw new ScenarioException(e.getMessage(), e);
+                }
+            }
+
             provinces.put(id, p);
         }
 

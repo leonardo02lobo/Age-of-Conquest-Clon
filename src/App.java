@@ -1,34 +1,43 @@
+import java.awt.GraphicsEnvironment;
 import java.nio.file.Path;
+import javax.swing.SwingUtilities;
 import map.ScenarioLoader;
 import model.GameState;
 import model.Nation;
 import model.Province;
 import ui.ConsoleGame;
+import ui.SwingGame;
 
 /**
  * Punto de entrada del clon de Age of Conquest.
- * Carga un escenario, muestra el estado inicial y arranca una partida hotseat
- * por consola (fase M2).
+ * Por defecto abre la interfaz gráfica (fase M6); con {@code --consola} juega
+ * en la terminal, y con {@code --solo-resumen} solo imprime el estado inicial.
  *
- * Uso: java App [escenario.json] [--solo-resumen]
+ * Uso: java App [escenario.json] [--consola] [--solo-resumen]
  */
 public class App {
 
     public static void main(String[] args) throws Exception {
         Path scenarioPath = Path.of("scenarios/europa_antigua.json");
         boolean summaryOnly = false;
+        boolean console = false;
         for (String arg : args) {
-            if (arg.equals("--solo-resumen")) {
-                summaryOnly = true;
-            } else {
-                scenarioPath = Path.of(arg);
+            switch (arg) {
+                case "--solo-resumen" -> summaryOnly = true;
+                case "--consola" -> console = true;
+                default -> scenarioPath = Path.of(arg);
             }
         }
 
         GameState state = ScenarioLoader.load(scenarioPath);
         printSummary(state);
+        if (summaryOnly) {
+            return;
+        }
 
-        if (!summaryOnly) {
+        if (!console && !GraphicsEnvironment.isHeadless()) {
+            SwingUtilities.invokeLater(() -> new SwingGame(state).start());
+        } else {
             new ConsoleGame(state).run();
         }
     }

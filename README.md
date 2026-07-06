@@ -4,7 +4,7 @@ Clon del juego de estrategia por turnos *Age of Conquest IV* (Noble Master Games
 desarrollado como proyecto de **Simulación de Sistemas (UNET)**.
 El diseño completo, el análisis del juego original y la hoja de ruta están en [PLAN.md](PLAN.md).
 
-## Estado actual — fases M1 a M5 completadas
+## Estado actual — fases M1 a M6 completadas
 
 - **M1 — Modelo de dominio** (`src/model/`): `Province` (provincias de tierra y zonas
   marítimas, población, felicidad, guarnición), `Nation` (oro, puntos de acción, rey,
@@ -45,10 +45,19 @@ El diseño completo, el análisis del juego original y la hoja de ruta están en
   (mismas semillas entre variantes → comparaciones apareadas); `sim.Simulacion`
   trae 4 experimentos predefinidos, imprime el resumen estadístico y exporta
   cada partida a `resultados/<experimento>.csv`.
-- **96 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor,
+- **M6 — Interfaz gráfica Swing** (`src/ui/MapPanel.java`, `src/ui/SwingGame.java`):
+  mapa clicable con una provincia por polígono coloreada por dueño (nombre, tropas,
+  ♔ rey y ⛨ fortificación); al seleccionar una provincia propia se resaltan sus
+  destinos alcanzables y el clic en uno abre el diálogo de movimiento (con opción
+  de llevar al rey); panel lateral de nación y órdenes (reclutar, fortificar,
+  saquear, decretos, guerra, impuestos), crónica de la partida y botón de fin de
+  turno; modo espectador automático si solo juegan IA. Los escenarios llevan
+  coordenadas de polígono opcionales (`"poligono"`); sin ellas se genera una
+  cuadrícula.
+- **98 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor,
   la economía, la IA y el runner por lotes.
 
-Próximas fases (ver PLAN.md §6): M6 interfaz gráfica, M7 diplomacia avanzada.
+Próximas fases (ver PLAN.md §6): M7 diplomacia avanzada (paz, alianzas, tributo).
 
 ## Experimentos de simulación
 
@@ -79,8 +88,9 @@ src/
   map/         Carga y validación de escenarios JSON
   engine/      Motor WEGO: órdenes, validación, combate y resolución del turno
   ai/          Jugadores artificiales (interfaz Agent + GreedyAgent heurística)
-  ui/          Partida por consola (humanos en hotseat, naciones IA automáticas)
-  App.java     Punto de entrada: resumen del escenario + partida por consola
+  sim/         Simulación por lotes y experimentos de sensibilidad (CSV)
+  ui/          Interfaz gráfica Swing (MapPanel, SwingGame) y partida por consola
+  App.java     Punto de entrada: GUI por defecto, --consola para la terminal
 test/          Pruebas JUnit 5 (espejo de los paquetes de src)
 scenarios/     Escenarios en JSON
 lib/           Dependencias: gson (JSON) y junit-platform-console-standalone (pruebas)
@@ -95,10 +105,11 @@ Requiere **Java 21+** (probado con Java 25). Desde la raíz del proyecto:
 javac -encoding UTF-8 -cp "lib/gson-2.11.0.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
       -d bin $(find src test -name '*.java')
 
-# Jugar (escenario por defecto: scenarios/europa_antigua.json)
+# Jugar con interfaz gráfica (escenario por defecto: scenarios/europa_antigua.json)
 java -cp "lib/gson-2.11.0.jar:bin" App
 
-# Jugar con otro escenario / solo mostrar el resumen inicial
+# Jugar en la terminal / con otro escenario / solo el resumen inicial
+java -cp "lib/gson-2.11.0.jar:bin" App --consola
 java -cp "lib/gson-2.11.0.jar:bin" App scenarios/mi_escenario.json
 java -cp "lib/gson-2.11.0.jar:bin" App --solo-resumen
 

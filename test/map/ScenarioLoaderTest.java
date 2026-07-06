@@ -111,6 +111,24 @@ class ScenarioLoaderTest {
         assertEquals(europa.rules().initialHappiness, europa.province("roma").happiness());
     }
 
+    @Test
+    void todasLasProvinciasDeEuropaTraenPoligono() {
+        for (Province p : europa.provinces()) {
+            assertTrue(p.polygon() != null && p.polygon().length >= 6
+                            && p.polygon().length % 2 == 0,
+                    "'" + p.id() + "' necesita un polígono válido para el mapa gráfico");
+        }
+    }
+
+    @Test
+    void unPoligonoImparEsRechazado() {
+        String json = "{\"nombre\": \"Test\", \"provincias\": ["
+                + "{\"id\": \"a\", \"poligono\": [0,0, 10,0, 10], \"adyacentes\": [\"b\"]},"
+                + "{\"id\": \"b\"}],"
+                + "\"naciones\": [{\"id\": \"n1\", \"provincias\": {\"a\": 10}}]}";
+        assertThrows(ScenarioException.class, () -> ScenarioLoader.fromJson(json));
+    }
+
     // --------------------------------------------------- validación de errores
 
     @Nested
