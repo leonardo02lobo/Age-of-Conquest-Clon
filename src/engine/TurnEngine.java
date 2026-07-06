@@ -29,9 +29,11 @@ public class TurnEngine {
     private final GameState state;
     private final Rules rules;
 
+    private final List<Order.Decree> pendingDecrees = new ArrayList<>();
     private final List<Order.Fortify> pendingFortifies = new ArrayList<>();
     private final List<Order.Recruit> pendingRecruits = new ArrayList<>();
     private final List<Order.Move> pendingMoves = new ArrayList<>();
+    private final List<Order.Pillage> pendingPillages = new ArrayList<>();
 
     /** Tropas ya comprometidas en movimientos salientes, por provincia de origen. */
     private final Map<String, Integer> committedTroops = new HashMap<>();
@@ -39,6 +41,8 @@ public class TurnEngine {
     private final Set<String> committedKings = new HashSet<>();
     /** Provincias con fortificación ya encargada este turno. */
     private final Set<String> pendingFortifiedProvinces = new HashSet<>();
+    /** Provincias con saqueo ya encargado este turno. */
+    private final Set<String> pendingPillagedProvinces = new HashSet<>();
 
     private boolean gameOver;
 
@@ -71,6 +75,9 @@ public class TurnEngine {
             case Order.Recruit recruit -> submitRecruit(nation, recruit);
             case Order.Fortify fortify -> submitFortify(nation, fortify);
             case Order.DeclareWar war -> submitDeclareWar(nation, war);
+            case Order.Pillage pillage -> submitPillage(nation, pillage);
+            case Order.Decree decree -> submitDecree(nation, decree);
+            case Order.SetTaxRate tax -> submitSetTaxRate(nation, tax);
         }
     }
 
@@ -204,6 +211,59 @@ public class TurnEngine {
         state.setRelation(nation.id(), target.id(), DiplomaticState.GUERRA);
     }
 
+    private void submitPillage(Nation nation, Order.Pillage pillage) {
+        Province province = ownProvince(nation, pillage.provinceId());
+        if (province.population() < 1) {
+            throw new OrderException("'" + province.id() + "' no tiene población que saquear");
+        }
+        if (pendingPillagedProvinces.contains(province.id())) {
+            throw new OrderException("'" + province.id() + "' ya será saqueada este turno");
+        }
+        chargeActionPoints(nation, rules.apCostPillage, "saquear");
+        pendingPillagedProvinces.add(province.id());
+        pendingPillages.add(pillage);
+    }
+
+    private void submitDecree(Nation nation, Order.Decree decree) {
+        Province province = ownProvince(nation, decree.provinceId());
+        if (decree.type() == Order.DecreeType.FESTIVAL && province.population() < 1) {
+            throw new OrderException("'" + province.id() + "' no tiene población para un festival");
+        }
+        double apCost = switch (decree.type()) {
+            case REPARTIR -> rules.apCostDecreeShare;
+            case FIESTA -> rules.apCostDecreeParty;
+            case FESTIVAL -> rules.apCostFestival;
+        };
+        double goldCost = switch (decree.type()) {
+            case REPARTIR -> rules.goldCostDecreeShare;
+            case FIESTA -> rules.goldCostDecreeParty;
+            case FESTIVAL -> rules.goldCostFestival;
+        };
+        if (nation.gold() < goldCost) {
+            throw new OrderException(String.format(
+                    "El decreto cuesta %.0f de oro y solo tienes %.1f", goldCost, nation.gold()));
+        }
+        chargeActionPoints(nation, apCost, "emitir un decreto");
+        nation.setGold(nation.gold() - goldCost);
+        pendingDecrees.add(decree);
+    }
+
+    private void submitSetTaxRate(Nation nation, Order.SetTaxRate tax) {
+        if (!rules.isTaxSeason(state.turn())) {
+            int next = state.turn() + (rules.taxSeasonInterval - (state.turn() - 1) % rules.taxSeasonInterval);
+            throw new OrderException("La tasa solo puede cambiarse en temporada fiscal (próxima: turno " + next + ")");
+        }
+        if (!rules.isAllowedTaxRate(tax.rate())) {
+            StringBuilder allowed = new StringBuilder();
+            for (int rate : rules.allowedTaxRates) {
+                allowed.append(allowed.isEmpty() ? "" : "/").append(rate);
+            }
+            throw new OrderException("Tasa inválida: " + tax.rate() + " (permitidas: " + allowed + ")");
+        }
+        // Efecto inmediato: la recaudación de este mismo turno usa la nueva tasa.
+        nation.setTaxRate(tax.rate());
+    }
+
     private Province ownProvince(Nation nation, String provinceId) {
         if (!state.hasProvince(provinceId)) {
             throw new OrderException("Provincia desconocida: '" + provinceId + "'");
@@ -233,18 +293,25 @@ public class TurnEngine {
         }
         TurnReport report = new TurnReport(state.turn());
 
+        resolveDecrees(report);
         resolveFortifications(report);
         resolveRecruitments(report);
         resolveMoves(report);
+        resolvePillages(report);
+        resolveEconomy(report);
+        resolveRevolts(report);
         sweepEliminations(report);
         checkVictory(report);
 
+        pendingDecrees.clear();
         pendingFortifies.clear();
         pendingRecruits.clear();
         pendingMoves.clear();
+        pendingPillages.clear();
         committedTroops.clear();
         committedKings.clear();
         pendingFortifiedProvinces.clear();
+        pendingPillagedProvinces.clear();
 
         if (!report.gameOver()) {
             state.advanceTurn();
@@ -253,6 +320,34 @@ public class TurnEngine {
             gameOver = true;
         }
         return report;
+    }
+
+    private void resolveDecrees(TurnReport report) {
+        for (Order.Decree order : pendingDecrees) {
+            Province province = state.province(order.provinceId());
+            if (!order.nationId().equals(province.ownerId())) {
+                continue;
+            }
+            switch (order.type()) {
+                case REPARTIR -> {
+                    province.setHappiness(province.happiness() + rules.decreeShareHappiness);
+                    report.add(nameOf(order.nationId()) + " reparte dinero en " + province.name()
+                            + " (felicidad: " + Math.round(province.happiness()) + "%)");
+                }
+                case FIESTA -> {
+                    province.setHappiness(province.happiness() + rules.decreePartyHappiness);
+                    report.add(nameOf(order.nationId()) + " celebra una fiesta en " + province.name()
+                            + " (felicidad: " + Math.round(province.happiness()) + "%)");
+                }
+                case FESTIVAL -> {
+                    long boosted = Math.min(rules.maxPopulation,
+                            Math.round(province.population() * (1 + rules.festivalPopulationBoost)));
+                    province.setPopulation(boosted);
+                    report.add(nameOf(order.nationId()) + " celebra un festival de fertilidad en "
+                            + province.name() + String.format(" (población: %,d)", boosted));
+                }
+            }
+        }
     }
 
     private void resolveFortifications(TurnReport report) {
@@ -361,6 +456,118 @@ public class TurnEngine {
                 killKing(attacker, report);
             }
         }
+    }
+
+    private void resolvePillages(TurnReport report) {
+        for (Order.Pillage order : pendingPillages) {
+            Province province = state.province(order.provinceId());
+            if (!order.nationId().equals(province.ownerId())) {
+                continue; // la provincia cayó en combate antes del saqueo
+            }
+            Nation nation = state.nation(order.nationId());
+            long destroyed = Math.round(province.population() * rules.pillagePopulationLoss);
+            double loot = destroyed * rules.pillageGoldPerInhabitant;
+            province.setPopulation(province.population() - destroyed);
+            province.setHappiness(province.happiness() - rules.pillageHappinessLoss);
+            nation.setGold(nation.gold() + loot);
+            report.add(String.format("%s saquea %s: +%.1f de oro (%,d habitantes menos, felicidad: %d%%)",
+                    nameOf(nation.id()), province.name(), loot, destroyed,
+                    Math.round(province.happiness())));
+        }
+    }
+
+    /**
+     * Fase económica de fin de turno, por nación viva: recaudación (solo las
+     * provincias con felicidad suficiente pagan), mantenimiento militar y
+     * administración; después crecimiento poblacional y evolución de la
+     * felicidad de cada provincia.
+     */
+    private void resolveEconomy(TurnReport report) {
+        for (Nation nation : state.livingNations()) {
+            List<Province> owned = state.provincesOf(nation.id());
+
+            double income = 0;
+            for (Province province : owned) {
+                if (province.happiness() >= rules.happinessRevoltThreshold) {
+                    income += rules.maxTaxGoldPerProvince
+                            * ((double) province.population() / rules.maxPopulation)
+                            * (nation.taxRate() / 100.0);
+                }
+            }
+            double upkeep = Math.ceil((double) state.totalTroops(nation.id()) / rules.troopsPerUpkeepGold)
+                    + rules.adminGoldPerProvince * owned.size();
+            nation.setGold(nation.gold() + income - upkeep);
+            report.add(String.format("Hacienda de %s: +%.1f impuestos, −%.1f mantenimiento (oro: %.1f)",
+                    nation.name(), income, upkeep, nation.gold()));
+
+            boolean atWar = isAtWar(nation);
+            double happinessDelta = rules.happinessBaseRecovery
+                    + (100 - nation.taxRate()) * rules.taxHappinessPerPoint
+                    - (atWar ? rules.warUnhappiness : 0);
+            for (Province province : owned) {
+                province.setPopulation(Math.min(rules.maxPopulation,
+                        Math.round(province.population() * (1 + rules.populationGrowth))));
+                province.setHappiness(province.happiness() + happinessDelta);
+            }
+        }
+    }
+
+    private boolean isAtWar(Nation nation) {
+        for (Nation other : state.livingNations()) {
+            if (!other.id().equals(nation.id())
+                    && nation.relation(other.id()) == DiplomaticState.GUERRA) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Fase estocástica (Monte Carlo): toda provincia con felicidad bajo el
+     * umbral puede rebelarse con probabilidad
+     * {@code min(máx, k·(umbral − felicidad)²)}, reducida si hay guarnición.
+     * La provincia rebelde se vuelve neutral con una milicia proporcional a su
+     * población. El sorteo usa el generador sembrado de la partida.
+     */
+    private void resolveRevolts(TurnReport report) {
+        for (Nation nation : state.livingNations()) {
+            for (Province province : state.provincesOf(nation.id())) {
+                double discontent = rules.happinessRevoltThreshold - province.happiness();
+                if (discontent <= 0) {
+                    continue;
+                }
+                double chance = Math.min(rules.revoltMaxChance,
+                        rules.revoltRiskK * discontent * discontent);
+                if (province.troops() >= 1) {
+                    chance *= rules.revoltGarrisonSuppression;
+                }
+                if (state.random().nextDouble() >= chance) {
+                    continue;
+                }
+                int rebels = (int) Math.max(1, Math.round(province.population() * rules.rebelsPerPopulation));
+                province.setOwnerId(null);
+                province.setTroops(rebels);
+                province.setFortified(false);
+                province.setHappiness(rules.revoltHappinessAfter);
+                report.add("¡Revuelta en " + province.name() + "! La provincia se independiza de "
+                        + nation.name() + " con " + rebels + " milicianos");
+                if (province.id().equals(nation.kingProvinceId())) {
+                    relocateKing(nation, report);
+                }
+            }
+        }
+    }
+
+    /** El rey huye de una revuelta a la provincia propia con más tropas (si existe). */
+    private void relocateKing(Nation nation, TurnReport report) {
+        List<Province> owned = state.provincesOf(nation.id());
+        if (owned.isEmpty()) {
+            nation.setKingProvinceId(null); // sin refugio: la nación caerá en el barrido
+            return;
+        }
+        owned.sort(Comparator.comparingInt(Province::troops).reversed());
+        nation.setKingProvinceId(owned.get(0).id());
+        report.add("El rey de " + nation.name() + " huye a " + owned.get(0).name());
     }
 
     /**

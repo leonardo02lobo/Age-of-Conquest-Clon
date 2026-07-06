@@ -195,6 +195,13 @@ public final class ScenarioLoader {
             boolean ai = !obj.has("ia") || obj.get("ia").getAsBoolean();
             Nation nation = new Nation(id, optString(obj, "nombre"), ai);
             nation.setGold(obj.has("oro") ? obj.get("oro").getAsDouble() : 0);
+            if (obj.has("tasa")) {
+                int rate = obj.get("tasa").getAsInt();
+                if (!rules.isAllowedTaxRate(rate)) {
+                    throw new ScenarioException("Tasa impositiva inválida para '" + id + "': " + rate);
+                }
+                nation.setTaxRate(rate);
+            }
 
             if (!obj.has("provincias") || obj.getAsJsonObject("provincias").isEmpty()) {
                 throw new ScenarioException("La nación '" + id + "' no tiene provincias iniciales");

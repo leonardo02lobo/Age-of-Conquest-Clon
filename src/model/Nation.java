@@ -16,6 +16,7 @@ public class Nation {
 
     private double gold;
     private double actionPoints;
+    private int taxRate = 100; // % sobre la recaudación base; solo cambia en temporada fiscal
     private String kingProvinceId; // null = el rey ha muerto (o la regla está desactivada)
     private boolean eliminated;
     private final Map<String, DiplomaticState> relations = new HashMap<>();
@@ -55,6 +56,15 @@ public class Nation {
 
     public void setActionPoints(double actionPoints) {
         this.actionPoints = Math.max(0, actionPoints);
+    }
+
+    /** Tasa impositiva actual (%). La validez del valor la controla el motor. */
+    public int taxRate() {
+        return taxRate;
+    }
+
+    public void setTaxRate(int taxRate) {
+        this.taxRate = taxRate;
     }
 
     /** Provincia donde está el rey, o {@code null} si no tiene. */

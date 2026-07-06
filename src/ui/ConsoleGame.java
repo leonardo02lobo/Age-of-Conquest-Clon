@@ -55,8 +55,9 @@ public class ConsoleGame {
     /** Fase de planificación de una nación. Devuelve false si se agotó la entrada. */
     private boolean planningPhase(Nation nation) {
         System.out.println();
-        System.out.printf("Turno de %s — oro: %.1f, AP: %.1f%n",
-                nation.name(), nation.gold(), nation.actionPoints());
+        String season = state.rules().isTaxSeason(state.turn()) ? " — ¡temporada fiscal!" : "";
+        System.out.printf("Turno de %s — oro: %.1f, AP: %.1f, impuestos: %d%%%s%n",
+                nation.name(), nation.gold(), nation.actionPoints(), nation.taxRate(), season);
         while (true) {
             System.out.print(nation.id() + "> ");
             if (!in.hasNextLine()) {
@@ -95,6 +96,30 @@ public class ConsoleGame {
                         engine.submit(new Order.DeclareWar(nation.id(), arg(parts, 1)));
                         System.out.println("    ¡Guerra declarada!");
                     }
+                    case "saquear" -> {
+                        engine.submit(new Order.Pillage(nation.id(), arg(parts, 1)));
+                        System.out.println("    Orden registrada.");
+                    }
+                    case "repartir" -> {
+                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
+                                Order.DecreeType.REPARTIR));
+                        System.out.println("    Orden registrada.");
+                    }
+                    case "fiesta" -> {
+                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
+                                Order.DecreeType.FIESTA));
+                        System.out.println("    Orden registrada.");
+                    }
+                    case "festival" -> {
+                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
+                                Order.DecreeType.FESTIVAL));
+                        System.out.println("    Orden registrada.");
+                    }
+                    case "impuestos" -> {
+                        engine.submit(new Order.SetTaxRate(nation.id(),
+                                Integer.parseInt(arg(parts, 1))));
+                        System.out.println("    Tasa fijada al " + arg(parts, 1) + "%.");
+                    }
                     default -> System.out.println("    Comando desconocido; escribe 'ayuda'.");
                 }
             } catch (OrderException e) {
@@ -121,6 +146,11 @@ public class ConsoleGame {
                       reclutar <provincia> <soldados>          consume oro y población
                       fortificar <provincia>                   +50% defensivo permanente
                       guerra <nacion>                          declara la guerra (efecto inmediato)
+                      saquear <provincia>                      población propia → oro (−felicidad)
+                      repartir <provincia>                     decreto: +10 de felicidad
+                      fiesta <provincia>                       decreto: +20 de felicidad
+                      festival <provincia>                     decreto: +20% de población
+                      impuestos <0|50|100|150|200>             solo en temporada fiscal
                       mapa | nacion | ver <provincia>          información
                       fin                                      termina tu planificación
                 """);

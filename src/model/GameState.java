@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * Estado completo de una partida: mapa (provincias), naciones y turno actual.
@@ -17,6 +18,7 @@ public class GameState {
     private final Rules rules;
     private final Map<String, Province> provinces; // LinkedHashMap: conserva el orden del escenario
     private final Map<String, Nation> nations;
+    private final Random random;
     private int turn = 1;
 
     public GameState(String scenarioName, Rules rules,
@@ -25,6 +27,16 @@ public class GameState {
         this.rules = rules;
         this.provinces = new LinkedHashMap<>(provinces);
         this.nations = new LinkedHashMap<>(nations);
+        this.random = new Random(rules.randomSeed);
+    }
+
+    /**
+     * Generador aleatorio de la partida, sembrado con {@code Rules.randomSeed}:
+     * con la misma semilla y las mismas órdenes, la partida es reproducible
+     * (requisito de los experimentos de simulación).
+     */
+    public Random random() {
+        return random;
     }
 
     public String scenarioName() {

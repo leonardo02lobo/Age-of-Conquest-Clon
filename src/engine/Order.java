@@ -35,4 +35,33 @@ public sealed interface Order {
      */
     record DeclareWar(String nationId, String targetNationId) implements Order {
     }
+
+    /**
+     * Saquear una provincia propia: destruye parte de la población a cambio de
+     * oro inmediato y hunde la felicidad (la táctica "rampage" del juego real).
+     */
+    record Pillage(String nationId, String provinceId) implements Order {
+    }
+
+    /** Tipos de decreto provincial (costes y efectos en {@link model.Rules}). */
+    enum DecreeType {
+        /** Repartir dinero: +felicidad moderada. */
+        REPARTIR,
+        /** Fiesta de inauguración: +felicidad alta. */
+        FIESTA,
+        /** Festival de fertilidad: +20% de población de una sola vez. */
+        FESTIVAL
+    }
+
+    /** Emitir un decreto sobre una provincia propia. */
+    record Decree(String nationId, String provinceId, DecreeType type) implements Order {
+    }
+
+    /**
+     * Cambiar la tasa impositiva de la nación. Solo es válido durante la
+     * temporada fiscal y con una de las tasas permitidas (0/50/100/150/200).
+     * Surte efecto inmediato.
+     */
+    record SetTaxRate(String nationId, int rate) implements Order {
+    }
 }

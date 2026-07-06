@@ -4,7 +4,7 @@ Clon del juego de estrategia por turnos *Age of Conquest IV* (Noble Master Games
 desarrollado como proyecto de **Simulación de Sistemas (UNET)**.
 El diseño completo, el análisis del juego original y la hoja de ruta están en [PLAN.md](PLAN.md).
 
-## Estado actual — fases M1 y M2 completadas
+## Estado actual — fases M1, M2 y M3 completadas
 
 - **M1 — Modelo de dominio** (`src/model/`): `Province` (provincias de tierra y zonas
   marítimas, población, felicidad, guarnición), `Nation` (oro, puntos de acción, rey,
@@ -22,13 +22,21 @@ El diseño completo, el análisis del juego original y la hoja de ruta están en
   eliminaciones y victoria por dominación o por límite de turnos.
 - **M2 — Partida jugable por consola** (`src/ui/ConsoleGame.java`): hotseat con todas
   las naciones (la IA llega en M4).
+- **M3 — Economía y población**: fase económica al cierre de cada turno — impuestos
+  sobre la población (las provincias con felicidad &lt; 50% no pagan), mantenimiento
+  militar y administrativo (el oro puede ser negativo: deuda), crecimiento
+  poblacional, evolución de la felicidad (recuperación base, presión fiscal, guerra);
+  **revueltas Monte Carlo** con generador sembrado (`Rules.randomSeed`, partidas
+  reproducibles); temporada fiscal cada 5 turnos con tasas 0/50/100/150/200%;
+  saqueo (población propia → oro) y decretos (repartir dinero, fiesta, festival
+  de fertilidad).
 - **Escenario de prueba** (`scenarios/europa_antigua.json`): Europa antigua con
   23 provincias (18 de tierra + 5 marítimas), 4 naciones (Imperio Romano, Cartago,
   Galia, Grecia) y 4 provincias neutrales; Roma y Cartago empiezan en guerra.
-- **65 pruebas JUnit** (`test/`) del modelo, el cargador, el combate y el motor.
+- **83 pruebas JUnit** (`test/`) del modelo, el cargador, el combate, el motor y
+  la economía.
 
-Próximas fases (ver PLAN.md §6): M3 economía y población por turno, M4 IA,
-M5 simulación por lotes, M6 interfaz gráfica.
+Próximas fases (ver PLAN.md §6): M4 IA, M5 simulación por lotes, M6 interfaz gráfica.
 
 ## Estructura
 
