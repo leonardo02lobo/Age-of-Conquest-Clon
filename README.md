@@ -143,3 +143,4 @@ aparecen en el panel *Testing*.
 
 Toda provincia sin dueño es neutral. El mapa debe ser conexo; los errores de formato
 se reportan con `ScenarioException` y un mensaje descriptivo.
+# Age-of-Conquest-Clon
