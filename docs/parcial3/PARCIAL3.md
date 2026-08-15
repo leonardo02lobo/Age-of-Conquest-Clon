@@ -1,0 +1,640 @@
+---
+title: "Implementación del Modelo Operacional de AGE OF CONQUEST"
+subtitle: "Simulador por eventos discretos: arquitectura, verificación, validación y análisis de casos borde"
+course: "0425803T: Simulación De Sistemas"
+authors:
+  - "Arturo Carvajalino — V-30.889.966"
+  - "Leonardo Lobo — V-31.489.733"
+place: "San Cristóbal"
+date: "Agosto del 2026"
+parcial: "Parcial III"
+---
+
+# 1. Alcance del simulador
+
+## 1.1 Qué se ha construido
+
+Este documento acompaña a un **simulador por eventos discretos** que materializa el
+modelo formal del Parcial II. El programa no replica la interfaz ni los mapas del juego
+comercial: implementa el *motor lógico*, en el que se ingresan variables de entrada
+—número de tropas, nivel de impuestos, fortificación, descontento— y el sistema calcula
+el estado del turno siguiente respetando la economía y la resolución de conflictos.
+
+El simulador implementa **la totalidad** del modelo formal:
+
+| Subsistema | Contenido | Estado |
+|:--|:--|:--:|
+| Reloj y LEF | τ = t + φ, clave (τ, π, ς), función de llegada (4.4), revalidación | completo |
+| Eventos | E1–E10, con los diez pseudocódigos de §4.5 | completo |
+| Económico | renta (3.1)–(3.3), tesoro (3.4)–(3.5), insolvencia (5.2) | completo |
+| Descontento | (3.6)–(3.9), umbral fiscal, tasa de equilibrio, n^max | completo |
+| Demográfico | crecimiento con saturación y daño de guerra (3.10)/(5.5) | completo |
+| Militar | terreno, movimiento (3.13), reclutamiento (3.11), poder (3.12) | completo |
+| Combate | potencias (3.14)–(3.18), bajas (3.19)–(3.21), regímenes | completo |
+| Moral | techo por distancia (3.27), regeneración (3.28), desgaste (3.29) | completo |
+| Aleatoriedad | LCG de 48 bits (3.26) y triangular inversa (3.25) | completo |
+| Diplomático | guarda §3.7.1, guerra (3.30), alianzas (3.31)–(3.32) | completo |
+| Agentes | las cuatro estrategias §2.4.9, árbol §4.6, BFS §4.6.5 | completo |
+| Fronteras | 12 dominios §5.1, 7 funciones por partes §5.2, 9 casos §5.3 | completo |
+
+El escenario de referencia es el del **Anexo C**: 24 provincias, grafo conexo de grado
+medio exactamente 3.50, terrenos repartidos 10 LLANURA / 6 BOSQUE / 4 MONTAÑA /
+4 COSTA, cuatro imperios —uno por estrategia— con tres provincias cada uno y doce
+provincias neutrales.
+
+## 1.2 Qué queda deliberadamente fuera
+
+El modelo del Parcial II es un modelo **del sistema**, no una réplica del ejecutable
+comercial. Abstrae por decisión de modelado varias mecánicas que el juego real sí posee
+y que se documentaron en el Parcial I:
+
+| Mecánica del juego real | Tratamiento en el modelo |
+|:--|:--|
+| Puntos de acción por turno | No modelada. El coste de las decisiones se expresa en oro. |
+| Rey / gobernante y su muerte | Sustituida por la **capital** $c_i$, que cumple el papel estructural (define el techo de moral) sin la mecánica de eliminación. |
+| Zonas marítimas y viaje naval | No modelada. El mapa es un grafo de provincias terrestres. |
+| Saqueo, decretos, festival de fertilidad | No modelados. La palanca económica es la tasa impositiva. |
+| Revueltas provinciales | No modeladas. El descontento actúa por la vía fiscal y defensiva. |
+| Temporada fiscal discreta (tasas 0/50/…/200) | Sustituida por tasa continua $\theta\in[0,150]$ decidida cada turno. |
+
+Estas ausencias **no son omisiones de implementación**: son las abstracciones que el
+Parcial II adoptó, y el simulador es fiel a ellas. Se declaran aquí porque condicionan
+el alcance de la validación (§4.1).
+
+## 1.3 Relación con el clon exploratorio del repositorio
+
+El repositorio contiene además un clon jugable de *Age of Conquest IV* en Java
+(`src/`, 4.470 líneas, 98 pruebas), desarrollado en una fase previa por ingeniería
+inversa del juego. Ese clon **implementa un modelo distinto**: motor de incremento fijo
+de tiempo, combate determinista, felicidad decreciente, revueltas Monte Carlo, rey y
+puntos de acción. Sirvió para explorar las mecánicas del sistema real y es el origen de
+buena parte del conocimiento que fundamenta las abstracciones de §1.2, pero **no es el
+modelo operacional que este informe defiende**. El simulador del Parcial III es el
+paquete `sim/` en Python, escrito contra el documento formal.
+
+---
+
+# 2. Arquitectura del software
+
+## 2.1 Organización
+
+Un módulo por capítulo del documento del Parcial II, de modo que la correspondencia
+documento ↔ código sea directa:
+
+```
+sim/
+  parametros.py   Terreno (matriz T §2.4.6), EstadoDiplomatico, Parametros (cap. 2)
+  azar.py         GeneradorLcg (3.26), triangular_inversa (3.25), GeneradorFijo
+  reloj.py        micro-fases, TipoEvento (tabla 4.1), Evento,
+                  ListaEventosFuturos (4.2), funcion_llegada (4.4)
+  estado.py       Provincia, Ejercito, Combate, Imperio, Estado (S(τ)) + auxiliares
+  economia.py     renta, tesoro, insolvencia, descontento, población
+  militar.py      poder, defensa, movimiento, reclutamiento, combate, moral
+  diplomacia.py   guarda diplomática, E7 y E8
+  agentes.py      las 4 estrategias, política, selección de objetivos, BFS
+  eventos.py      E1–E10, predicados de validez (4.3), Motor (despachador)
+  recolector.py   métricas O1–O5, ResultadoPartida
+  escenario.py    generación, validación y carga del Anexo C
+  lote.py         réplicas, intervalos de confianza, barridos
+  casos_borde.py  demostraciones de §5
+  cli.py          interfaz operacional
+escenarios/referencia24.json     mapa congelado del Anexo C
+tests/test_traza_dorada.py       prueba dorada de §4.7
+```
+
+## 2.2 El bucle del motor
+
+El estado permanece constante entre eventos y salta cuando un evento se ejecuta
+(ec. 3.0). El reloj **no avanza con paso fijo**:
+
+```
+ALGORITMO MotorSimulacion
+    Inicializar()
+    MIENTRAS 𝓛 ≠ ∅  ∧  Z = 0  HACER
+        e ← ExtraerMinimo(𝓛)          // clave (τ, π, ς) — ec. (4.2)
+        SI ¬Valido(e): continuar       // tabla 4.3
+        τ ← e.tiempo                   // el reloj SALTA
+        Procesar(e)                    // despacha a E1 … E10
+        RecolectarEstadisticas()
+    FIN MIENTRAS
+```
+
+Cada tipo de evento es una función con su predicado de validez asociado; el despachador
+(`Motor.paso`) es genérico y no conoce los tipos, lo que permite probar cada evento
+aisladamente y mantener la correspondencia 1:1 con los pseudocódigos de §4.5.
+
+## 2.3 Decisiones de implementación
+
+**(a) El reloj es aritmética entera, no coma flotante.** Un turno son $10^6$
+micro-fases; $\varepsilon = 1000$ y $\Delta = 746\,000$. La clave de la LEF debe ser un
+orden total estricto y la simulación exactamente reproducible; con `float`, sumar
+repetidamente $\varepsilon$ y restos $c \bmod \Delta$ acumula error binario y dos
+eventos que deberían caer en el mismo instante pueden separarse —o colisionar— según el
+orden de las operaciones. El único redondeo se aplica una sola vez, en la función de
+llegada, al convertir el coste $w(T)/v_a$ a micro-fases.
+
+**(b) Las fuerzas son reales, no enteras.** El documento declara el dominio de $F_a$ y
+$g_p$ como $\mathbb{R}_{\ge 0}$ y la traza de §4.7 opera con valores como $53.89$ y
+$48.11$. Redondear a enteros haría irreproducible la traza y alteraría el reparto
+proporcional de bajas (3.12c). La población sí se trata como habitantes.
+
+**(c) El generador aleatorio es propio.** `random` de la biblioteca estándar aplica un
+mezclado inicial de la semilla y compone `random()` a partir de dos extracciones, de
+modo que $R_k \neq X_{k+1}/m$. El documento define exactamente $R_k = X_{k+1}/\mathsf{m}$
+y afirma que cada combate consume dos números; solo un generador propio cumple ambas
+cosas de forma literal y **permite verificarlas**. La clase `GeneradorFijo` inyecta una
+secuencia predeterminada, lo que hace posible la prueba dorada.
+
+**(d) La LEF es un montículo binario** (`heapq`) sobre la tupla $(\tau, \pi, \varsigma)$.
+Como $\varsigma$ es único por construcción, la clave nunca empata y el cuarto elemento
+—el evento— jamás se compara.
+
+## 2.4 Manejo de datos
+
+El escenario se declara en JSON con terreno y población por provincia y estrategia y
+capital por imperio. La carga valida unicidad de ids, existencia y simetría de las
+adyacencias, **conexidad del grafo**, terrenos válidos, poblaciones en $[1000,10000]$ y
+que cada capital pertenezca al territorio de su imperio; cualquier violación se rechaza
+con un mensaje que identifica el elemento culpable. Los resultados de los experimentos
+se exportan a CSV con una fila por réplica.
+
+> **Nota sobre el Anexo C.** El documento del Parcial II afirma que la especificación
+> completa del mapa "acompaña a este documento como fichero de datos". Ese fichero no
+> existía, de modo que el mapa se **genera de forma determinista** respetando todas las
+> restricciones declaradas (24 provincias, conexo, grado medio 3.5, reparto de terrenos
+> 10/6/4/4, cuatro imperios de tres provincias, doce neutrales) y se congela en
+> `escenarios/referencia24.json`. La topología concreta —rejilla 4×6 con adyacencia
+> ortogonal más cuatro diagonales, 42 aristas— es por tanto una decisión de esta fase.
+
+## 2.5 Trazabilidad documento ↔ código
+
+| Función del Parcial I | Ecuación | Ubicación en el código |
+|:--|:--|:--|
+| $\mathcal{F}_1$ `calcularIngreso` | (3.1) | `economia.renta_provincia` |
+| $\mathcal{F}_2$ `DecidirReclutamiento` | (3.11) | `militar.reclutar` |
+| $\mathcal{F}_3$ `SeleccionarObjetivos` | criterio $\gamma_{\text{atq}}$ | `agentes.seleccionar_objetivo` |
+| $\mathcal{F}_4$ `CosteMovimiento` | (3.13) | `militar.coste_movimiento` |
+| $\mathcal{F}_5$ moral | (3.27) | `militar.techo_moral` |
+| $\mathcal{F}_6$ `Terreno` | matriz $\mathcal{T}$ | `parametros.Terreno` |
+| $\mathcal{F}_7$ `Aleatorio` | (3.23)–(3.26) | `azar.GeneradorLcg`, `azar.triangular_inversa` |
+| $\mathcal{F}_8$ `Fortificacion` | (3.16) | `militar.factor_fortificacion` |
+| $\mathcal{F}_9$ `RegenerarMoral` | (3.28) | `militar.regenerar_moral` |
+| $\mathcal{F}_{10}$ `ActualizarPoderMilitar` | (3.12) | `militar.poder_militar` |
+| $\mathcal{F}_{11}$ `SeleccionarEstrategia` | tabla §2.4.9 | `agentes.PARAMETROS_ESTRATEGIA` |
+| $\mathcal{F}_{12}$ `evaluarDiplomacia` | (3.30)–(3.32) | `diplomacia.evaluar_diplomacia` |
+| $\mathcal{F}_{13}$ función de fase | (4.1)–(4.4) | `reloj.TipoEvento`, `reloj.funcion_llegada` |
+
+| Evento | Ubicación | Evento | Ubicación |
+|:--|:--|:--|:--|
+| E1 Inicio de Turno | `eventos.e1_inicio_turno` | E6 Eliminación | `eventos.e6_eliminacion` |
+| E2 Planificación | `eventos.e2_planificacion` | E7/E8 Diplomacia | `eventos.e7e8_diplomacia` |
+| E3 Movimiento | `eventos.e3_movimiento` | E9 Fin de Turno | `eventos.e9_fin_turno` |
+| E4 Combate | `eventos.e4_resolucion_combate` | E10 Fin de Juego | `eventos.e10_fin_juego` |
+| E5 Conquista | `eventos.e5_conquista` | | |
+
+### Única desviación declarada respecto al documento
+
+**Guarda de tránsito en E2.** El pseudocódigo de §4.5 hace que E2 itere sobre *todos*
+los ejércitos del imperio sin comprobar si alguno tiene una llegada pendiente. Como el
+coste de cruzar COSTA, BOSQUE o MONTAÑA supera $\Delta = 0.746$, la llegada se programa
+para un turno posterior; en el turno intermedio E2 volvería a emitir una orden para el
+mismo ejército, destacando de nuevo $f_{\text{gua}} \cdot F_a$ de retaguardia y drenando
+su fuerza turno a turno. El modelo declara $\omega_a$ (`enCombate`) pero **no tiene un
+atributo equivalente para el movimiento**: es una infra-especificación.
+
+Se repara añadiendo el conjunto `Estado.en_transito`: un ejército con llegada pendiente
+no recibe órdenes nuevas, y la guarda se libera tanto al llegar como al cancelarse el
+movimiento por revalidación. La corrección es de la misma naturaleza que las siete que
+el Parcial II aplicó al Parcial I, y se documenta aquí por el mismo motivo.
+
+---
+
+# 3. Verificación
+
+Verificar responde a *¿el código implementa el documento?*; validar, a *¿el modelo
+representa el sistema?* Esta sección cubre lo primero.
+
+## 3.1 Prueba dorada: la traza de escritorio de §4.7
+
+El documento del Parcial II incluye en §4.7 un turno completo calculado a mano, variable
+por variable, y lo declara explícitamente "caso de prueba para la implementación del
+Parcial III". Se ha convertido en una prueba automatizada que parte del estado declarado
+al inicio del turno 5, inyecta los sorteos $R_1 = 0.7314$ y $R_2 = 0.2891$ mediante
+`GeneradorFijo`, y compara **44 magnitudes** contra los valores del documento.
+
+**Resultado: 44 de 44 comprobaciones superadas.** El error relativo máximo observado es
+$5.1\times10^{-4}$, por debajo de la tolerancia adoptada de $10^{-3}$.
+
+| Magnitud | Simulador | Documento §4.7 | Error rel. |
+|:--|--:|--:|--:|
+| $I_{p_1}$ renta | 65.6250 | 65.625 | 0 |
+| $R_1$ recaudación | 128.1250 | 128.125 | 0 |
+| $C_1$ coste | 13.7500 | 13.75 | 0 |
+| $G_1$ tesoro | 264.3750 | 264.375 | 0 |
+| $u_1$ unidades reclutadas | 158 | 158 | 0 |
+| $P_a^{\text{det}}$ | 95.8800 | 95.88 | 0 |
+| $P_d^{\text{det}}$ | 80.0800 | 80.08 | 0 |
+| $k$ cociente determinista | 0.8352 | 0.835 | 2.5e−4 |
+| $\tau_{\text{lleg}}$ | 5.8167 | 5.817 | 5.7e−5 |
+| $U_a = F^{-1}(0.7314)$ | 1.0534 | 1.0534 | 1.2e−5 |
+| $U_d = F^{-1}(0.2891)$ | 0.9521 | 0.9521 | 2.2e−5 |
+| $P_a$ | 101.0012 | 101.00 | 1.1e−5 |
+| $P_d$ | 76.2425 | 76.24 | 3.3e−5 |
+| $b_{\text{gan}}$ | 53.8975 | 53.89 | 1.4e−4 |
+| $F_{a_1}$ supervivientes | 48.1025 | 48.11 | 1.6e−4 |
+| $\mu_{a_1}$ tras desgaste | 0.6916 | 0.692 | 5.1e−4 |
+| $\Delta D$ | 5.0000 | 5.0 | 0 |
+| $L_{p_4}$ tras daño de guerra | 3792.20 | 3792 | 5.4e−5 |
+| $\bar\mu_{a_1}$ techo de moral | 0.8800 | 0.88 | 0 |
+| $\mu_{a_1}$ tras regenerar | 0.7916 | 0.792 | 4.4e−4 |
+| $M_1$ poder militar | 259.1025 | 259.11 | 2.9e−5 |
+
+**Sobre la tolerancia.** Los residuos no son error del simulador sino del documento: §4.7
+imprime los valores intermedios redondeados a 2–4 decimales y encadena algunos cálculos
+sobre cifras ya redondeadas. Por ejemplo, obtiene $b_{\text{gan}}$ a partir de
+$P_d/P_a = 0.5284$ redondeado, mientras que el simulador arrastra la precisión completa.
+Se declara por ello una tolerancia relativa de $10^{-3}$.
+
+Esta prueba ejercita E1, E2, E3, E4, E5 y E9, y con ellos el generador triangular, la
+matriz de terreno, la fortificación, el respaldo civil, la moral, el descontento, la
+población y el combate: **en torno al 70 % del modelo** sobre un estado de cuatro
+provincias.
+
+## 3.2 Garantías demostradas en el documento
+
+Los tres teoremas se comprueban en ejecución sobre partidas completas:
+
+| Garantía | Instrumentación | Resultado |
+|:--|:--|:--|
+| **Teorema 1** — validez de la ventana | se verifica que la fase de toda llegada cae en $[0.15, 0.896)$ | 0 violaciones |
+| **Teorema 2** — causalidad | se verifica que el reloj es monótono no decreciente | 0 violaciones |
+| **Teorema 3** — terminación | toda partida acaba por $\Theta_V$, $m=1$ o $t_{\max}$ | 100 % de las réplicas terminan |
+| Orden total de la LEF | $\varsigma$ único por construcción | sin empates observados |
+
+## 3.3 Verificación del consumo de aleatoriedad
+
+El documento afirma que "cada resolución de combate consume exactamente dos números".
+El generador propio expone un contador que permite comprobarlo: en la partida de
+referencia, $\nu = 15$ combates y **30 números consumidos**, exactamente $2\nu$. Ningún
+agente consume aleatoriedad: la política es determinista, de modo que toda la
+variabilidad entre réplicas es atribuible al azar del combate y no a la decisión.
+
+---
+
+# 4. Validación y calibración
+
+## 4.1 Alcance de la validación: por qué no hay comparación numérica con el juego real
+
+El enunciado sugiere presentar tablas comparativas que demuestren que los resultados del
+simulador coinciden con los del juego real bajo las mismas condiciones iniciales. **Esa
+comparación no se ha realizado, y conviene explicar por qué antes que presentarla de
+forma engañosa.**
+
+De los 35 parámetros del capítulo 2 del Parcial II, **uno solo** está marcado `[D]`
+(documentado del juego real): $\beta_F$, la bonificación defensiva por nivel de
+fortificación. Los 34 restantes son `[M]` (decisión de modelado) o `[C]` (calibrable).
+El modelo no es una réplica del ejecutable comercial sino un modelo del sistema, y las
+mecánicas de §1.2 —puntos de acción, rey, saqueo, revueltas, tasas discretas— que sí
+existen en el juego están deliberadamente ausentes. Una "coincidencia numérica" entre
+ambos sería un artefacto de calibración, no evidencia de validez.
+
+Se adopta en su lugar el conjunto de técnicas de validación reconocidas en la
+literatura de simulación, y se declara cuáles se aplican y cuáles no:
+
+| Técnica de validación | Aplicada | Instrumento |
+|:--|:--:|:--|
+| Trazas (*traces*) | ✔ | traza dorada §4.7, 44/44 (§3.1) |
+| Condiciones extremas | ✔ | los 12 dominios de §5.1 forzados (§5) |
+| Pruebas degeneradas | ✔ | los 9 casos de §5.3 (§5.4) |
+| Valores fijos | ✔ | régimen determinista $k \le 2/3$: victoria garantizada |
+| Validez interna | ✔ | varianza entre réplicas con semillas apareadas (§4.3) |
+| Análisis de sensibilidad | ✔ | barrido de $K_B$ (§4.4) |
+| Validación predictiva | ✔ | contraste de la predicción de §3.2.4 (§4.2) |
+| Gráficas operacionales | ✔ | series por turno exportadas a CSV |
+| Comparación con otros modelos | parcial | el clon Java del repositorio (§1.3) |
+| **Validación con datos históricos** | **✘** | requiere observaciones del ejecutable comercial, no disponibles |
+
+## 4.2 Validación predictiva: la predicción de §3.2.4
+
+El modelo formal hizo en §3.2.4 una **predicción falsable** antes de existir el
+simulador. De la ecuación (3.9),
+
+$$
+n^{\max}_{\text{paz}} = 8 + \frac{1.5 + 3}{0.5} = 17,
+\qquad
+n^{\max}_{\text{guerra}} = 8 + \frac{1.5 - 2 + 3}{0.5} = 13 ,
+$$
+
+mientras que la cuota de victoria exige $\lceil \Theta_V N \rceil = \lceil 0.60 \cdot 24 \rceil = 15$
+provincias. Como $15 \le 17$ pero $15 > 13$, el documento concluyó que *un imperio en
+guerra permanente no puede alcanzar la condición de victoria sin que su descontento
+crezca sin freno*.
+
+**Contraste empírico (n = 40 réplicas, semillas 20260805–20260844):**
+
+> Ganadores que estuvieron en guerra en **todos** los turnos de la partida:
+> **0 de 40 (0.0 %)**.
+
+La predicción se confirma sin excepciones. El mecanismo se observa directamente en la
+partida de referencia: al llegar a $t_{\max}$, los dos imperios supervivientes con
+territorio significativo —cimeria con 12 provincias y dorania con 11— están ambos en
+guerra permanente, ambos con tesoro nulo, y **ninguno alcanza las 15 provincias**. La
+partida termina por límite de turnos con $q_\ell = 0.500$, atascada exactamente en la
+banda que la ecuación (3.9) predice como insostenible.
+
+Es el resultado de validación más fuerte del trabajo, porque contrasta una consecuencia
+cuantitativa deducida del modelo —no impuesta— contra el comportamiento observado.
+
+## 4.3 Configuración de referencia
+
+40 réplicas independientes del escenario del Anexo C. La simulación es **terminante**
+(acaba por $\Theta_V$, $m = 1$ o $t_{\max}$), no estacionaria: no hay periodo de
+calentamiento que eliminar y la unidad de análisis es la réplica. Los intervalos son al
+95 % por aproximación normal sobre la media entre réplicas.
+
+| Métrica | Valor | IC 95 % |
+|:--|--:|:--|
+| **O1** duración de la partida | 109.12 turnos | ± 25.80 (σ = 83.26) |
+| **O4** combates por partida | 15.12 | ± 0.84 |
+| **O4** bajas acumuladas | 681.3 | ± 38.9 |
+| **O5** punto de inflexión ($q_\ell \ge 0.5$) | 21.65 turnos | ± 2.01 (40/40 partidas) |
+
+**O2 — tasa de victoria por estrategia:**
+
+| Estrategia | Victorias | IC 95 % |
+|:--|--:|:--|
+| AGRESIVA | 0.0 % | ± 0.0 % |
+| DEFENSIVA | 0.0 % | ± 0.0 % |
+| **ECONÓMICA** | **100.0 %** | ± 0.0 % |
+| EQUILIBRADA | 0.0 % | ± 0.0 % |
+
+**Interpretación honesta de O2.** El objetivo O1 del Parcial I era medir el balance
+entre estrategias; con los parámetros por defecto **ese balance no existe**: ECONÓMICA
+gana las 40 réplicas. El mecanismo es identificable y coherente con el modelo: es la
+única estrategia con política fiscal adaptativa (ec. 3.8), de modo que baja su tasa al
+entrar en guerra y al superar $n^\ast$, manteniendo $\Delta D_p \le 0$ y evitando por
+completo el bucle B1d. En la partida de referencia se la observa operando a
+$\theta = 8.3\,\%$ al final —su $\theta^{\text{eq}}$ exacto— mientras AGRESIVA sostiene
+$\theta = 125\,\%$ hasta que todas sus provincias cruzan $D^\ast$, pierde su renta,
+entra en insolvencia y es eliminada.
+
+Es decir: la hipótesis de comportamiento que el documento formuló en §4.6.1 —AGRESIVA
+"gana rápido o colapsa por descontento e insolvencia"— se cumple, pero **siempre en su
+rama de colapso**. La dispersión $\sigma = 83.26$ turnos en O1 revela además un
+comportamiento bimodal: una parte de las réplicas se resuelve pronto y otra se atasca
+hasta $t_{\max}$.
+
+La conclusión metodológica es que $\eta_\theta$, $\eta_n$ y $n^\ast$ —los parámetros que
+gobiernan la penalización por sobreextensión— están calibrados de forma que la ventaja
+de la política adaptativa domina cualquier otra consideración. Reequilibrarlos es el
+trabajo de calibración natural de una fase posterior.
+
+## 4.4 Análisis de sensibilidad de $K_B$
+
+$K_B$ es el coeficiente de bajas, el parámetro que gobierna el bucle de atrición B2.
+La sección §6.3 del Parcial II predijo que afectaría a la **duración de la partida (O1)**
+y a la **intensidad bélica (O4)**. Se barre sobre $\{0.3, 0.5, 0.7, 0.9\}$ con 30
+réplicas por variante y **semillas apareadas** entre variantes (números aleatorios
+comunes), de modo que las diferencias observadas no se deban a la suerte del sorteo.
+
+| $K_B$ | O1 duración | O4 combates | O4 bajas | O5 inflexión |
+|--:|:--|:--|:--|:--|
+| 0.3 | 152.90 ± 28.45 | 14.13 ± 0.86 | 535.0 ± 36.2 | 19.40 ± 0.82 |
+| 0.5 | 131.70 ± 30.48 | 13.53 ± 0.49 | 580.6 ± 38.8 | 19.73 ± 0.66 |
+| 0.7 | 106.23 ± 29.85 | 15.30 ± 1.00 | 687.8 ± 43.9 | 20.97 ± 0.66 |
+| 0.9 | 139.23 ± 29.07 | 17.23 ± 1.42 | 789.0 ± 79.6 | 24.13 ± 3.42 |
+
+**Sobre O4 la predicción se confirma con claridad.** Las bajas acumuladas crecen de
+forma monótona con $K_B$ (535 → 581 → 688 → 789), y el crecimiento es
+estadísticamente significativo: los intervalos de los extremos no se solapan. Es el
+comportamiento esperado, puesto que $K_B$ multiplica directamente $b_{\text{gan}}$ en
+(3.19). El número de combates también crece, con menor claridad.
+
+**Sobre O1 la predicción no se confirma.** La duración no es monótona —desciende de
+152.9 a 106.2 y vuelve a subir a 139.2— y los intervalos de confianza de las cuatro
+variantes se solapan ampliamente. Con 30 réplicas por variante no puede afirmarse un
+efecto de $K_B$ sobre la duración de la partida.
+
+Esto tiene una explicación plausible dentro del propio modelo, y merece señalarse: en el
+escenario de referencia solo se registran unos 15 combates por partida sobre 24
+provincias, porque la mayor parte de la expansión se produce sobre las 12 provincias
+**neutrales**, que tienen guarnición nula y se ocupan sin combate (caso degenerado (a)
+de §5.3). Si el combate interviene poco, un parámetro que solo actúa dentro del combate
+difícilmente puede gobernar la duración. La duración la deciden los bucles económicos
+B1b y B1d, no la atrición B2.
+
+---
+
+# 5. Análisis de casos borde
+
+El enunciado pide explicar qué ocurre ante situaciones extremas, y nombra tres:
+impuestos al máximo, moral en cero y bancarrota. Las tres están cubiertas por el
+capítulo 5 del Parcial II y son demostrables en vivo con `python3 -m sim --caso <nombre>`.
+
+## 5.1 Impuestos al máximo ($\theta = \theta_{\max} = 150\,\%$)
+
+**Ecuación que lo gobierna:** el umbral fiscal, ec. (5.1).
+
+$$
+I_p(t)=
+\begin{cases}
+\iota L_p \dfrac{\theta_i}{100}(1+\beta_\phi\phi_p), & D_p < D^{\ast}=60\\[3mm]
+0, & D_p \ge D^{\ast}
+\end{cases}
+$$
+
+Con $\theta = 150$ en paz, $\Delta D_p = 0.06(150-50) - 1.5 = +4.5$ puntos/turno.
+Partiendo de $D^0 = 20$, el umbral se alcanza en unos 9 turnos. **Traza real del
+simulador** sobre el imperio AGRESIVA:
+
+| turno | $D$ medio | prov. sin tributar | renta | oro | $M$ |
+|--:|--:|:--:|--:|--:|--:|
+| 1 | 23.0 | 0/3 | 191.81 | 38.41 | 327.0 |
+| 4 | 40.3 | 0/3 | 111.90 | 18.58 | 671.0 |
+| 7 | 59.9 | **3/6** | 211.80 | 9.20 | 655.7 |
+| 10 | 69.2 | 6/7 | 173.11 | 12.97 | 840.5 |
+| 13 | 78.2 | **7/7** | **0.00** | 28.60 | 759.6 |
+| 14 | 80.3 | 6/6 | 0.00 | 0.00 | **291.6** |
+| 15 | 90.1 | 4/4 | 0.00 | 0.00 | **0.0** |
+| 19 | 100.0 | 1/1 | 0.00 | 0.00 | 0.0 |
+
+**Comportamiento observado.** No es una degradación gradual sino un salto: cada
+provincia pasa de tributar íntegramente a no tributar nada. En el turno 13 la renta del
+imperio es exactamente cero, lo que abre el lazo de realimentación positiva destructivo
+que el documento anticipó en §5.2(a):
+
+$$
+D_p \ge D^\ast \Rightarrow I_p = 0 \Rightarrow G_i \downarrow \Rightarrow \text{menos tropas} \Rightarrow \text{más derrotas} \Rightarrow \Delta D_p \uparrow
+$$
+
+Un turno después el imperio entra en insolvencia y su poder militar cae de 759.6 a
+291.6, y al siguiente a cero. A partir de ahí pierde provincias sin poder defenderlas:
+de 7 a 1 en seis turnos. **La única salida sería reducir $\theta$ por debajo de
+$\theta^{\text{eq}}$**, cosa que la estrategia AGRESIVA no contempla por definición. El
+tiempo de recuperación desde $D_p = 100$ en el mejor caso —paz y $\theta = 0$— sería de
+9 turnos sin recaudar de esa provincia.
+
+## 5.2 Bancarrota
+
+**Ecuación que la gobierna:** la regla de insolvencia, ec. (5.2).
+
+$$
+\big(G_i, M_i\big) \longmapsto
+\begin{cases}
+\big(G_i, M_i\big), & G_i \ge 0\\[2mm]
+\big(0,\ M_i - \Delta M_i\big), & G_i < 0
+\end{cases}
+\qquad \Delta M_i = \left\lceil \frac{|G_i|}{c_{\text{up}}} \right\rceil
+$$
+
+Se fuerza el déficit fijando $\theta = 0$ —renta nula— sobre un imperio con un ejército
+desproporcionado. **Comportamiento observado:** el tesoro nunca queda negativo; las
+tropas impagadas desertan en orden determinista —primero los ejércitos más alejados de
+la capital, a igual distancia los de menor moral, a igual moral los de menor
+identificador, y las guarniciones en último lugar—; y el poder militar decae hasta
+extinguirse.
+
+**La regla no oscila** (Proposición 3): tras desertar $\Delta M_i$ unidades, el gasto del
+turno siguiente se reduce en $c_{\text{up}}\Delta M_i \ge |G_i|$ mientras la recaudación
+no disminuye, de modo que el imperio retorna a solvencia. No se observa ningún ciclo
+deserción → superávit → recluta → deserción.
+
+**Caso terminal.** Si $R_i < c_{\text{adm}} n_i$ —si la administración por sí sola supera
+toda la renta— ninguna deserción resuelve el déficit: $M_i \to 0$ y el imperio subsiste
+sin ejército hasta ser conquistado. Es un estado **estable pero terminal**, y constituye
+la vía de derrota puramente económica del modelo. Es exactamente el destino que se
+observa en §5.1 para la estrategia AGRESIVA, y se confirma en las réplicas: es la causa
+de que AGRESIVA nunca gane.
+
+## 5.3 Moral en el mínimo
+
+**Ecuación que la gobierna:** el techo por proyección de fuerza, ec. (5.4).
+
+$$
+\bar\mu_a =
+\begin{cases}
+1-\lambda_d\,d(u_a,c_i), & d < d_{\max} = \dfrac{1-\mu_{\min}}{\lambda_d} = 10\\[3mm]
+\mu_{\min}=0.40, & d \ge 10
+\end{cases}
+$$
+
+**Precisión importante sobre el enunciado.** El enunciado menciona "moral en cero", pero
+en este modelo **la moral no puede llegar a cero**: su dominio es
+$[\mu_{\min}, 1] = [0.40,\ 1]$. Es una decisión de modelado deliberada — con $\mu = 0$ se
+tendría $P_a = 0$ y todo ataque sería imposible, un estado absorbente sin sentido táctico.
+El caso extremo real es la **saturación en $\mu_{\min}$**.
+
+**Comportamiento observado.** Un ejército de $F_a = 100$ ataca una provincia de llanura
+con $\mathcal{D}_p = 70$, $\phi = 2$ y $D_p = 60$, es decir $P_d = 69.16$. Lo único que
+varía es su distancia a la capital:
+
+| $d$ | $\bar\mu_a$ | $P_a$ | $k = P_d/P_a$ | régimen |
+|--:|--:|--:|--:|:--|
+| 0 | 1.000 | 100.00 | 0.692 | estocástico |
+| 3 | 0.820 | 82.00 | 0.843 | estocástico |
+| 5 | 0.700 | 70.00 | 0.988 | estocástico ($k \approx 1 \Rightarrow \Pr = 1/2$) |
+| 8 | 0.520 | 52.00 | 1.330 | estocástico |
+| **9** | 0.460 | 46.00 | **1.503** | **determinista (derrota garantizada)** |
+| 10 | **0.400** | 40.00 | 1.729 | determinista — techo saturado |
+| 12 | **0.400** | 40.00 | 1.729 | determinista — techo saturado |
+
+El mismo ejército, con la misma fuerza, pasa de tener un 50 % de probabilidades de
+vencer a **no poder vencer bajo ninguna circunstancia** por el solo hecho de operar a
+nueve provincias de su capital en lugar de a cinco: al cruzar $k = 3/2$ el soporte
+acotado de la triangular deja de alcanzar. Más allá de $d = 10$ el ejército no pierde
+eficacia adicional, pero opera permanentemente al 40 %.
+
+Combinado con el criterio de ataque $P_a^{\text{det}} \ge \gamma_{\text{atq}} P_d^{\text{det}}$,
+esto define un **alcance máximo de conquista** por campaña: para seguir avanzando un
+imperio debería mover su capital, lo que solo ocurre si la pierde. Es el mecanismo B1c
+del bucle de sobreextensión expresado como frontera del estado.
+
+## 5.4 Otros casos degenerados verificados
+
+| Caso | §5.3 | Comportamiento observado |
+|:--|:--:|:--|
+| Provincia sin defensa ($\mathcal{D}_p = 0$) | (a) | Ocupación sin bajas, resuelta por E5 directamente, **sin crear entidad Combate y sin consumir aleatorios**. Consistente con la ley lineal: $b_{\text{gan}} = K_B \cdot 0 = 0$. |
+| Ejército bajo el mínimo ($F_a < F_{\min}$) | (b) | Se disuelve; su fuerza residual se incorpora a la guarnición si está en provincia propia. Evita ejércitos fantasma. |
+| Pérdida de la capital | (c) | $c_i \leftarrow \arg\max L_p$; **todos** los techos de moral se recalculan al instante, reconfigurando el alcance operativo del imperio. |
+| Imperio sin ejércitos | (d) | Sobrevive; se defiende con guarniciones y levanta uno nuevo cuando $g_{c_i} > g_{\text{ret}}$. No es condición de eliminación. |
+| Empate en la cuota del líder | (e) | Se resuelve por menor identificador, de forma reproducible entre ejecuciones. |
+| Conquista de provincia ya perdida | (h) | Cancelada por el predicado de validez de E5. En la partida de referencia se cancelan 14 eventos de 1462. |
+| Movimiento de imperio eliminado | (i) | Cancelado por el predicado de E3 ($\alpha_{\pi_a} = 1$). |
+
+---
+
+# 6. Conclusiones
+
+**Sobre la implementación.** El modelo formal del Parcial II resultó ser directamente
+programable: de sus 34 ecuaciones y 10 eventos, **todos** se implementaron sin necesidad
+de decisiones adicionales, salvo una infra-especificación —la ausencia de un atributo de
+tránsito para los ejércitos— documentada en §2.5. El criterio de suficiencia que el
+Parcial II se fijó —"un programador independiente debe poder codificar el sistema leyendo
+únicamente este documento"— se cumple en la práctica.
+
+**Sobre la verificación.** La traza de escritorio de §4.7 resultó ser el instrumento más
+valioso del documento: 44 comprobaciones que ejercitan el 70 % del modelo y detectan
+cualquier alteración de las ecuaciones. Los tres teoremas se sostienen en ejecución sin
+una sola violación.
+
+**Sobre la validación.** El resultado más sólido es la confirmación de la predicción de
+§3.2.4: ninguno de 40 ganadores estuvo en guerra continua, tal como la ecuación (3.9)
+anticipaba al deducir $n^{\max}_{\text{guerra}} = 13 < 15$. Que una consecuencia
+cuantitativa deducida del modelo antes de existir el simulador se verifique después es
+la mejor evidencia disponible de coherencia interna.
+
+**Sobre lo que no funcionó como se esperaba.** Dos resultados negativos merecen quedar
+registrados, porque son tan informativos como los positivos:
+
+1. **El balance entre estrategias (O2) no existe** con la calibración por defecto:
+   ECONÓMICA gana el 100 % de las réplicas. La política fiscal adaptativa domina porque
+   $\eta_n$ y $n^\ast$ hacen que la sobreextensión sea el factor decisivo de la partida.
+2. **El efecto de $K_B$ sobre la duración (O1) no se confirma**, aunque sí sobre la
+   intensidad bélica (O4). La causa identificada es que el escenario del Anexo C tiene
+   12 provincias neutrales de guarnición nula, de modo que la mayor parte de la
+   expansión ocurre sin combate y un parámetro que solo actúa dentro del combate no
+   puede gobernar la duración.
+
+Ambos apuntan al mismo trabajo de calibración pendiente: reequilibrar los parámetros de
+sobreextensión y dotar de guarnición inicial a las provincias neutrales para que el
+subsistema militar tenga peso real en la trayectoria del sistema.
+
+---
+
+# Anexo A — Reproducción de los resultados
+
+Todos los números de este informe se regeneran con:
+
+```bash
+python3 -m sim --traza-dorada      # verificación §3.1 — 44/44
+python3 -m sim --turnos 5          # cinco fases consecutivas
+python3 -m sim --partida           # partida completa, semilla 20260805
+python3 -m sim --caso todos        # los cinco casos borde del §5
+python3 -m sim --lote 40           # configuración de referencia §4.3
+python3 -m sim --barrido           # sensibilidad de K_B §4.4
+python3 -m sim --interactivo       # entrada manual de variables
+```
+
+Requiere únicamente Python 3.11 o superior, sin dependencias externas. Todos los
+resultados son exactamente reproducibles: fijados la semilla $s_0$ y el orden total
+(4.2), la trayectoria de la simulación es única.
+
+# Anexo B — Comandos del modo interactivo
+
+| Comando | Efecto |
+|:--|:--|
+| `avanzar [n]` | procesa $n$ turnos completos mostrando la traza de eventos |
+| `paso` | procesa un único evento de la LEF |
+| `estado` | resumen de todos los imperios |
+| `ver imperio <id>` | estado, auxiliares ($q_i$, $B_i$, $\bar g_i$, $\theta^{\text{eq}}$, $n^{\max}$) y matriz $\delta$ |
+| `ver provincia <id>` | estado, fuerza defensiva y renta |
+| `ver lef` | cola de eventos pendientes con su clave $(\tau, \pi, \varsigma)$ |
+| `evaluar <origen> <destino>` | $P_a^{\text{det}}$, $P_d^{\text{det}}$, $k$ y régimen, sin consumir aleatorios |
+| `fijar tasa <imperio> <v>` | $\theta_i \in [0, 150]$ |
+| `fijar guarnicion <prov> <v>` | $g_p \ge 0$ |
+| `fijar fuerza <ejército> <v>` | $F_a \ge 0$ |
+| `fijar fortificacion <prov> <v>` | $\phi_p \in \{0..4\}$ |
+| `fijar descontento <prov> <v>` | $D_p \in [0, 100]$ |
+| `fijar poblacion <prov> <v>` | $L_p \in [0, 20000]$ |
+
+Toda entrada fuera de dominio se rechaza indicando el rango válido, sin alterar el estado.

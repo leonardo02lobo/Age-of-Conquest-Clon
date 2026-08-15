@@ -1,0 +1,327 @@
+{
+  "nombre": "Referencia 24 (Anexo C)",
+  "provincias": [
+    {
+      "id": "p00",
+      "nombre": "Provincia 00",
+      "terreno": "LLA",
+      "poblacion": 1000,
+      "adyacentes": [
+        "p01",
+        "p10"
+      ]
+    },
+    {
+      "id": "p01",
+      "nombre": "Provincia 01",
+      "terreno": "BOS",
+      "poblacion": 2373,
+      "adyacentes": [
+        "p00",
+        "p02",
+        "p11"
+      ]
+    },
+    {
+      "id": "p02",
+      "nombre": "Provincia 02",
+      "terreno": "MON",
+      "poblacion": 3746,
+      "adyacentes": [
+        "p01",
+        "p03",
+        "p12",
+        "p13"
+      ]
+    },
+    {
+      "id": "p03",
+      "nombre": "Provincia 03",
+      "terreno": "COS",
+      "poblacion": 5119,
+      "adyacentes": [
+        "p02",
+        "p04",
+        "p13"
+      ]
+    },
+    {
+      "id": "p04",
+      "nombre": "Provincia 04",
+      "terreno": "BOS",
+      "poblacion": 6492,
+      "adyacentes": [
+        "p03",
+        "p05",
+        "p14"
+      ]
+    },
+    {
+      "id": "p05",
+      "nombre": "Provincia 05",
+      "terreno": "LLA",
+      "poblacion": 7865,
+      "adyacentes": [
+        "p04",
+        "p15"
+      ]
+    },
+    {
+      "id": "p10",
+      "nombre": "Provincia 10",
+      "terreno": "LLA",
+      "poblacion": 9238,
+      "adyacentes": [
+        "p00",
+        "p11",
+        "p20"
+      ]
+    },
+    {
+      "id": "p11",
+      "nombre": "Provincia 11",
+      "terreno": "COS",
+      "poblacion": 1610,
+      "adyacentes": [
+        "p01",
+        "p10",
+        "p12",
+        "p21",
+        "p22"
+      ]
+    },
+    {
+      "id": "p12",
+      "nombre": "Provincia 12",
+      "terreno": "LLA",
+      "poblacion": 2983,
+      "adyacentes": [
+        "p02",
+        "p11",
+        "p13",
+        "p22"
+      ]
+    },
+    {
+      "id": "p13",
+      "nombre": "Provincia 13",
+      "terreno": "LLA",
+      "poblacion": 4356,
+      "adyacentes": [
+        "p02",
+        "p03",
+        "p12",
+        "p14",
+        "p23"
+      ]
+    },
+    {
+      "id": "p14",
+      "nombre": "Provincia 14",
+      "terreno": "MON",
+      "poblacion": 5729,
+      "adyacentes": [
+        "p04",
+        "p13",
+        "p15",
+        "p23",
+        "p24"
+      ]
+    },
+    {
+      "id": "p15",
+      "nombre": "Provincia 15",
+      "terreno": "BOS",
+      "poblacion": 7102,
+      "adyacentes": [
+        "p05",
+        "p14",
+        "p25"
+      ]
+    },
+    {
+      "id": "p20",
+      "nombre": "Provincia 20",
+      "terreno": "BOS",
+      "poblacion": 8475,
+      "adyacentes": [
+        "p10",
+        "p21",
+        "p30"
+      ]
+    },
+    {
+      "id": "p21",
+      "nombre": "Provincia 21",
+      "terreno": "LLA",
+      "poblacion": 9848,
+      "adyacentes": [
+        "p11",
+        "p20",
+        "p22",
+        "p31"
+      ]
+    },
+    {
+      "id": "p22",
+      "nombre": "Provincia 22",
+      "terreno": "MON",
+      "poblacion": 2220,
+      "adyacentes": [
+        "p11",
+        "p12",
+        "p21",
+        "p23",
+        "p32"
+      ]
+    },
+    {
+      "id": "p23",
+      "nombre": "Provincia 23",
+      "terreno": "BOS",
+      "poblacion": 3593,
+      "adyacentes": [
+        "p13",
+        "p14",
+        "p22",
+        "p24",
+        "p33",
+        "p34"
+      ]
+    },
+    {
+      "id": "p24",
+      "nombre": "Provincia 24",
+      "terreno": "COS",
+      "poblacion": 4966,
+      "adyacentes": [
+        "p14",
+        "p23",
+        "p25",
+        "p34"
+      ]
+    },
+    {
+      "id": "p25",
+      "nombre": "Provincia 25",
+      "terreno": "LLA",
+      "poblacion": 6339,
+      "adyacentes": [
+        "p15",
+        "p24",
+        "p35"
+      ]
+    },
+    {
+      "id": "p30",
+      "nombre": "Provincia 30",
+      "terreno": "LLA",
+      "poblacion": 7712,
+      "adyacentes": [
+        "p20",
+        "p31"
+      ]
+    },
+    {
+      "id": "p31",
+      "nombre": "Provincia 31",
+      "terreno": "MON",
+      "poblacion": 9085,
+      "adyacentes": [
+        "p21",
+        "p30",
+        "p32"
+      ]
+    },
+    {
+      "id": "p32",
+      "nombre": "Provincia 32",
+      "terreno": "BOS",
+      "poblacion": 1457,
+      "adyacentes": [
+        "p22",
+        "p31",
+        "p33"
+      ]
+    },
+    {
+      "id": "p33",
+      "nombre": "Provincia 33",
+      "terreno": "COS",
+      "poblacion": 2830,
+      "adyacentes": [
+        "p23",
+        "p32",
+        "p34"
+      ]
+    },
+    {
+      "id": "p34",
+      "nombre": "Provincia 34",
+      "terreno": "LLA",
+      "poblacion": 4203,
+      "adyacentes": [
+        "p23",
+        "p24",
+        "p33",
+        "p35"
+      ]
+    },
+    {
+      "id": "p35",
+      "nombre": "Provincia 35",
+      "terreno": "LLA",
+      "poblacion": 5576,
+      "adyacentes": [
+        "p25",
+        "p34"
+      ]
+    }
+  ],
+  "imperios": [
+    {
+      "id": "aquilonia",
+      "nombre": "Aquilonia",
+      "estrategia": "AGR",
+      "capital": "p00",
+      "provincias": [
+        "p00",
+        "p01",
+        "p10"
+      ]
+    },
+    {
+      "id": "borealis",
+      "nombre": "Borealis",
+      "estrategia": "DEF",
+      "capital": "p05",
+      "provincias": [
+        "p05",
+        "p04",
+        "p15"
+      ]
+    },
+    {
+      "id": "cimeria",
+      "nombre": "Cimeria",
+      "estrategia": "ECO",
+      "capital": "p30",
+      "provincias": [
+        "p30",
+        "p31",
+        "p20"
+      ]
+    },
+    {
+      "id": "dorania",
+      "nombre": "Dorania",
+      "estrategia": "EQU",
+      "capital": "p35",
+      "provincias": [
+        "p35",
+        "p34",
+        "p25"
+      ]
+    }
+  ]
+}

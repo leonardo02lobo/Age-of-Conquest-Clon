@@ -1,0 +1,573 @@
+# =============================================================================
+#  Parcial II — Simulación de Sistemas (UNET)
+#  Contrato estructurado del enunciado: cada requisito del README.md original
+#  convertido en una unidad atómica con id, criterio de aceptación y la fuente
+#  del código del clon que ya lo implementa (o el hueco que falta).
+#
+#  Los mismos ids (E1.R1, E2.R4, …) se usan en PLANTILLA.md y CHECKLIST.md.
+#  Fuente del enunciado: ../../../README.md
+# =============================================================================
+
+meta:
+  materia: Simulación de Sistemas
+  institucion: UNET
+  parcial: II
+  fase: Transición del modelo conceptual al diseño lógico y matemático
+  sistema_modelado: Age of Conquest IV
+  implementacion_referencia:
+    repo: Age of Conquest - Clon
+    lenguaje: Java 25
+    doc_arquitectura: PLAN.md
+  objetivo: >-
+    Transformar el modelo conceptual cualitativo del Parcial I en un modelo
+    definido por funciones matemáticas, ecuaciones de estado y estructuras
+    algorítmicas de eventos (LEF), suficientemente preciso para que un
+    programador independiente que nunca haya jugado a Age of Conquest pueda
+    codificar el sistema únicamente a partir del documento.
+  entregable_final: Documento técnico (secciones 1–4)
+  restriccion_transversal: >-
+    Autosuficiencia: el documento no puede apoyarse en "como en el juego" ni en
+    conocimiento tácito del jugador. Toda mecánica citada debe quedar cerrada
+    por una ecuación, una tabla o un bloque de pseudocódigo del propio documento.
+
+# -----------------------------------------------------------------------------
+#  Convenciones de notación (obligatorio fijarlas antes de escribir ecuaciones;
+#  la sección 1 del documento las declara y el resto del documento las respeta)
+# -----------------------------------------------------------------------------
+notacion:
+  indices:
+    t: turno (reloj discreto de la simulación), t ∈ ℕ, t ≥ 1
+    i: índice de provincia, i ∈ P
+    n: índice de nación, n ∈ N
+  conjuntos:
+    P: conjunto de provincias del escenario (tierra ∪ agua)
+    P_n: provincias controladas por la nación n
+    N: conjunto de naciones
+    N_vivas: naciones no eliminadas
+  regla: >-
+    Todo símbolo usado en la sección 2 o 3 debe estar declarado en la tabla de
+    la sección 1 con nombre, unidad, dominio y clasificación. Sin excepciones
+    (es el criterio "Coherencia Sistémica", 15%).
+
+# -----------------------------------------------------------------------------
+#  ENTREGABLES
+# -----------------------------------------------------------------------------
+entregables:
+
+  # ===========================================================================
+  - id: E1
+    titulo: Diccionario Formal de Variables y Parámetros
+    seccion_documento: 1
+    proposito: >-
+      Fijar el vocabulario simbólico del modelo. Es la base de la coherencia:
+      las secciones 2 y 3 no pueden introducir símbolos nuevos.
+    requisitos:
+
+      - id: E1.R1
+        texto: >-
+          Clasificar todas las variables del sistema en Variables de Estado
+          (definen la configuración del sistema en el instante t), Variables de
+          Flujo (tasas de cambio que las actualizan entre t y t+1) y Variables
+          Auxiliares (cantidades derivadas, calculadas dentro del turno y no
+          persistidas).
+        aceptacion:
+          - Cada variable aparece en exactamente una de las tres categorías.
+          - >-
+            Toda variable de estado tiene una ecuación de actualización asociada
+            en E2 (o se declara explícitamente como constante durante la partida).
+          - Ninguna variable usada en E2 o E3 queda fuera de la tabla.
+        fuente_codigo:
+          estado_provincia: src/model/Province.java:19-24
+          estado_nacion: src/model/Nation.java:17-22
+          estado_global: src/model/GameState.java:22
+        variables_estado_minimas:
+          - simbolo: "P_{i,t}"
+            campo: Province.population
+            descripcion: habitantes de la provincia i en el turno t
+          - simbolo: "T_{i,t}"
+            campo: Province.troops
+            descripcion: guarnición (soldados) de la provincia i
+          - simbolo: "H_{i,t}"
+            campo: Province.happiness
+            descripcion: felicidad/moral de la provincia i
+          - simbolo: "F_{i,t}"
+            campo: Province.fortified
+            descripcion: indicador binario de fortificación
+          - simbolo: "O_{i,t}"
+            campo: Province.ownerId
+            descripcion: dueño de la provincia (nación o neutral ∅)
+          - simbolo: "E_{n,t}"
+            campo: Nation.gold
+            descripcion: tesoro (oro) de la nación n
+          - simbolo: "A_{n,t}"
+            campo: Nation.actionPoints
+            descripcion: puntos de acción disponibles en el turno
+          - simbolo: "τ_{n,t}"
+            campo: Nation.taxRate
+            descripcion: tasa impositiva vigente (%)
+          - simbolo: "k_{n,t}"
+            campo: Nation.kingProvinceId
+            descripcion: provincia donde reside el rey (∅ si ha muerto)
+          - simbolo: "D_{n,m,t}"
+            campo: Nation.relations
+            descripcion: estado diplomático del par (n,m) ∈ {NEUTRAL, GUERRA, ALIANZA}
+          - simbolo: "X_{n,t}"
+            campo: Nation.eliminated
+            descripcion: indicador de nación eliminada
+          - simbolo: "t"
+            campo: GameState.turn
+            descripcion: reloj de la simulación
+
+      - id: E1.R2
+        texto: >-
+          Definir la unidad de medida teórica de cada variable y parámetro
+          (p. ej. oro/turno, soldados/provincia, habitantes, adimensional).
+        aceptacion:
+          - Toda fila de la tabla tiene columna "unidad" no vacía.
+          - >-
+            Las unidades permiten verificar el balance dimensional de cada
+            ecuación de E2 (E2.R6 lo comprueba explícitamente).
+          - Las magnitudes adimensionales se marcan como tales (p. ej. bonos, φ).
+        nota: >-
+          Distinguir stock (oro, habitantes, soldados) de flujo (oro/turno,
+          habitantes/turno): es lo que hace verificable el balance dimensional.
+
+      - id: E1.R3
+        texto: >-
+          Establecer los parámetros fijos del modelo (constantes del juego)
+          identificados empíricamente, separando los documentados por el juego
+          real de las decisiones de modelado propias y calibrables.
+        aceptacion:
+          - Cada parámetro lleva símbolo, valor, unidad y procedencia.
+          - >-
+            Procedencia clasificada en {documentado en el juego real,
+            decisión de modelado, calibrado por experimento}.
+          - Los parámetros calibrables se marcan como factores de sensibilidad.
+        fuente_codigo: src/model/Rules.java (los ~45 parámetros ya existen y están comentados)
+        parametros_documentados_del_juego:
+          - "kingCombatBonus = 0.30 (bono de combate del rey)"
+          - "fortDefenseBonus = 0.50 (bono defensivo de fortificación)"
+          - "maxPopulation = 1 000 000 hab/provincia"
+          - "maxTaxGoldPerProvince = 250 oro/(provincia·turno) a población y tasa máximas"
+          - "troopsPerUpkeepGold = 20 soldados por 1 oro/turno de mantenimiento"
+          - "allowedTaxRates = {0, 50, 100, 150, 200} %"
+          - "apCostFortify = 0.5, apCostPillage = 1.0 AP"
+          - "kingDeathTerritoryLoss = 0.9 (fracción de territorio perdida al morir el rey)"
+          - "decretos: REPARTIR +10 H, FIESTA 25 oro/+20 H, FESTIVAL +20% población"
+        parametros_de_modelado_calibrables:
+          - "combatAttrition φ = 0.70"
+          - "populationGrowth g = 0.015 /turno"
+          - "revoltRiskK κ = 4e-4"
+          - "happinessRevoltThreshold H* = 50"
+          - "taxHappinessPerPoint = 0.04"
+          - "warUnhappiness = 2.0 /turno"
+          - "rebelsPerPopulation = 2e-4"
+        evidencia_experimental: >-
+          Los experimentos de M5 (BatchRunner, 100 partidas/variante) ya
+          cuantifican la sensibilidad a fortDefenseBonus, combatAttrition y
+          revoltRiskK: material directo para justificar los valores elegidos.
+
+  # ===========================================================================
+  - id: E2
+    titulo: Formulación del Modelo Matemático (Ecuaciones Dinámicas)
+    seccion_documento: 2
+    proposito: >-
+      Sustituir toda afirmación cualitativa por una ecuación de diferencia o una
+      regla de decisión cerrada. "La población genera impuestos" no vale; hay
+      que decir cuánto, con qué unidad y bajo qué condición.
+    ponderacion_rubrica: Rigor Matemático (35%)
+    requisitos:
+
+      - id: E2.R1
+        texto: >-
+          Ecuación de actualización del tesoro E_{n,t+1} en función de los
+          impuestos recolectados por provincia y los gastos de mantenimiento
+          militar y administrativo.
+        aceptacion:
+          - La recaudación es función explícita de P_{i,t}, τ_{n,t} y H_{i,t}.
+          - >-
+            Se explicita la condición de recaudación (una provincia solo tributa
+            si H_{i,t} ≥ H*) mediante indicador o función por partes.
+          - El mantenimiento militar refleja el redondeo hacia arriba real.
+          - "Dimensionalmente: [oro] = [oro] + [oro/turno]·[turno]."
+        forma_implementada: |
+          E_{n,t+1} = E_{n,t} + Σ_{i∈P_n} 𝟙[H_{i,t} ≥ H*] · G_max · (P_{i,t}/P_max) · (τ_{n,t}/100)
+                              − ( ⌈ Σ_{i∈P_n} T_{i,t} / u ⌉ + a · |P_n| )
+          con G_max = 250 oro, P_max = 1e6 hab, u = 20 soldados/oro, a = 1 oro/provincia
+        fuente_codigo: src/engine/TurnEngine.java:481-509 (resolveEconomy)
+        observacion: >-
+          El enunciado propone G(M) como gasto de mantenimiento militar; aquí
+          G(M) = ⌈M/u⌉ + a·|P_n| incluye además la administración territorial.
+          Debe justificarse esa descomposición en el documento.
+
+      - id: E2.R2
+        texto: Ecuación de la dinámica poblacional por provincia.
+        aceptacion:
+          - Crecimiento geométrico con tasa g y techo P_max explícito.
+          - >-
+            Se modelan también los sumideros de población: reclutamiento
+            (2 hab/soldado) y saqueo (−20% de golpe), y la fuente puntual del
+            festival de fertilidad (+20%).
+        forma_implementada: |
+          P_{i,t+1} = min( P_max , round( P_{i,t} · (1 + g) ) ) − 2·R_{i,t} − ΔP^saqueo_{i,t} + ΔP^festival_{i,t}
+        fuente_codigo:
+          crecimiento: src/engine/TurnEngine.java:504-505
+          reclutamiento: src/engine/TurnEngine.java:161-168
+          saqueo: src/engine/TurnEngine.java:464-466
+          festival: src/engine/TurnEngine.java:339-341
+        atencion: >-
+          El orden importa: en el motor el reclutamiento descuenta población en
+          la fase de emisión de la orden (antes de la resolución), mientras que
+          el crecimiento se aplica en la fase económica. El documento debe fijar
+          ese orden porque cambia el resultado numérico.
+
+      - id: E2.R3
+        texto: >-
+          Ecuación de la dinámica de felicidad/moral, incluyendo el efecto de la
+          presión fiscal, el estado de guerra y los decretos.
+        aceptacion:
+          - ΔH es función explícita de τ y del indicador de guerra.
+          - Se declara el acotamiento H ∈ [0, 100] como parte del modelo, no como detalle de implementación.
+          - Se identifica el punto fijo (τ tal que ΔH = 0) y su interpretación.
+        forma_implementada: |
+          ΔH_{n,t} = h_0 + (100 − τ_{n,t})·β − w·𝟙[nación n en guerra]
+          H_{i,t+1} = clamp( H_{i,t} + ΔH_{n,t} + Σ decretos_{i,t} − 30·𝟙[saqueada] , 0 , 100 )
+          con h_0 = 1, β = 0.04, w = 2
+        fuente_codigo: src/engine/TurnEngine.java:499-507
+        analisis_esperado: >-
+          Con β = 0.04: τ=0 → +4/turno, τ=100 → 0, τ=200 → −4/turno. En paz el
+          equilibrio está en τ = 125; en guerra en τ = 75. Este cálculo es el
+          tipo de resultado que sustenta la nota de Rigor Matemático.
+
+      - id: E2.R4
+        texto: >-
+          Modelo de resolución de combate. Formulación determinista o
+          probabilística (variantes de las ecuaciones de Lanchester) que explique
+          cómo se calculan las bajas de atacante y defensor a partir de la
+          superioridad numérica y las bonificaciones de terreno/fortificación/rey.
+        aceptacion:
+          - Se define la fuerza efectiva de cada bando como producto tropas × (1 + Σ bonos).
+          - Se define el criterio de victoria y la resolución del empate exacto.
+          - Se da la fórmula de supervivientes del ganador con su parámetro de desgaste.
+          - Se justifica la relación con la ley cuadrática de Lanchester y en qué se aparta de ella.
+        forma_implementada: |
+          F_A = T_A · (1 + b_A),    b_A = 0.30·𝟙[rey ataca]
+          F_D = T_D · (1 + b_D),    b_D = 0.50·𝟙[fortificada] + 0.30·𝟙[rey defiende]
+
+          Gana el atacante ⟺ F_A > F_D    (empate exacto: retiene el defensor)
+
+          Supervivientes del ganador:  S = max(1, round( T_gan · (1 − φ · F_perd/F_gan) ))
+          Bajas del perdedor: totales (aniquilación del bando derrotado)
+
+          Caso borde: T_D = 0 → ocupación sin bajas, S = T_A
+        fuente_codigo: src/engine/CombatResolver.java:27-49
+        justificacion_requerida: >-
+          Es un Lanchester discreto de una sola pasada, no la integración
+          continua clásica. El documento debe argumentar por qué (turnos
+          discretos WEGO, batalla resuelta en un único evento) y qué implica:
+          el resultado depende solo del cociente de fuerzas F_perd/F_gan, no del
+          tamaño absoluto de los ejércitos.
+
+      - id: E2.R5
+        texto: >-
+          Generación de variables aleatorias: definir formalmente la única
+          fuente de estocasticidad del modelo (riesgo de revuelta) — su
+          distribución, su método de generación y su semilla.
+        aceptacion:
+          - Se declara la ley de probabilidad de revuelta como función de la felicidad.
+          - Se declara la variante Bernoulli generada por transformada inversa sobre U(0,1).
+          - Se documenta el generador de U(0,1) (LCG de 48 bits de java.util.Random) y su semilla.
+          - Se argumenta la reproducibilidad y su papel en el diseño de experimentos.
+        forma_implementada: |
+          Descontento:   d_{i,t} = max(0, H* − H_{i,t})
+          Probabilidad:  q_{i,t} = min( q_max , κ · d_{i,t}² ) · (σ si T_{i,t} ≥ 1 sino 1)
+                         con κ = 4e-4, q_max = 0.9, σ = 0.5
+          Sorteo:        U ~ Uniforme(0,1);  revuelta ⟺ U < q_{i,t}
+          Generador:     LCG de 48 bits (java.util.Random), semilla s = 20260705
+        fuente_codigo: src/engine/TurnEngine.java:528-555
+        pendiente: >-
+          El enunciado dice explícitamente "Leer generación de variables
+          aleatorias". Falta redactar en el documento: método congruencial
+          lineal (X_{k+1} = (aX_k + c) mod m), transformada inversa para la
+          Bernoulli, y por qué la semilla fija habilita comparación por semillas
+          apareadas entre variantes experimentales (ya usada en BatchRunner).
+
+      - id: E2.R6
+        texto: Verificación del balance dimensional de todas las ecuaciones de E2.
+        aceptacion:
+          - Tabla de comprobación ecuación → unidades de cada término → veredicto.
+          - Ningún término suma magnitudes de unidades distintas.
+        motivo: >-
+          Criterio explícito de la rúbrica ("dimensionalmente balanceadas").
+          Es barato de producir y se puntúa directamente.
+
+  # ===========================================================================
+  - id: E3
+    titulo: Diseño Algorítmico y Lógica de Decisión
+    seccion_documento: 3
+    proposito: >-
+      Dar la representación lógica de los bucles críticos, en pseudocódigo o
+      diagrama de flujo, con el detalle necesario para codificar sin ambigüedad.
+    ponderacion_rubrica: Lógica Algorítmica (35%)
+    requisitos:
+
+      - id: E3.R1
+        texto: >-
+          Ciclo de resolución de fin de turno, con el orden exacto de cálculo
+          (qué se computa primero: crecimiento, recaudación, decaimiento de
+          moral, combates, revueltas…).
+        aceptacion:
+          - Pseudocódigo secuencial numerado, más diagrama de flujo equivalente.
+          - >-
+            Se justifica el orden elegido y se señala qué cambiaría si se
+            permutaran fases (sensibilidad al orden).
+          - Se distingue la fase de planificación (emisión de órdenes, cobro de costes) de la de resolución.
+        orden_implementado:
+          - "0. Planificación WEGO: todas las naciones emiten órdenes; los costes (AP, oro, población) se cobran al emitir"
+          - "1. Decretos (REPARTIR / FIESTA / FESTIVAL)"
+          - "2. Fortificaciones"
+          - "3. Reclutamientos"
+          - "4. Movimientos y combates (reyes primero, luego orden de emisión)"
+          - "5. Saqueos"
+          - "6. Economía: recaudación → mantenimiento → crecimiento poblacional → felicidad"
+          - "7. Revueltas (fase estocástica)"
+          - "8. Barrido de eliminaciones"
+          - "9. Comprobación de victoria"
+          - "10. Avance del reloj t ← t+1 y refresco de puntos de acción"
+        fuente_codigo: src/engine/TurnEngine.java:286-319 (endTurn)
+        atencion: >-
+          El enunciado sugiere "primero crecimiento de población, luego
+          recaudación". El motor hace lo contrario: recauda con la población de
+          inicio de turno y después la hace crecer. Es una decisión de modelado
+          legítima (el censo fiscal precede al crecimiento) pero DEBE quedar
+          declarada y justificada en el documento, no ocultada.
+
+      - id: E3.R2
+        texto: >-
+          Árbol de decisión de la IA en un caso básico: criterios lógicos por
+          los que decide atacar, defenderse, subir o bajar impuestos.
+        aceptacion:
+          - Diagrama de árbol o flujo con las condiciones y sus umbrales numéricos.
+          - Cada umbral remite a un parámetro nombrado en el diccionario (E1).
+          - Se declara que la política es determinista (toda la aleatoriedad queda en las revueltas).
+        politica_implementada:
+          - "1. Temporada fiscal: si H̄ < 50 → bajar un escalón de tasa; si H̄ > 80 → subir un escalón"
+          - "2. Apagar incendios: hasta 3 decretos FIESTA en las provincias con H < 45 (respetando reserva de oro)"
+          - "3. Atacar destino alcanzable si tropas_disponibles ≥ 1.5 × defensa efectiva; prioriza el objetivo más poblado"
+          - "4. Si no conquistó nada y no hay guerra abierta: declarar la guerra al vecino más débil si tropas_propias ≥ 2 × las suyas"
+          - "5. Reforzar frontera: BFS multifuente desde las provincias fronterizas; el interior avanza un paso"
+          - "6. Fortificar la sede del rey si oro ≥ reserva + coste"
+          - "7. Reclutar con el excedente sobre la reserva de 30 oro"
+        fuente_codigo:
+          politica: src/ai/GreedyAgent.java:61-77 (plan)
+          umbrales: src/ai/GreedyAgent.java:38-58
+          defensa_efectiva: src/ai/GreedyAgent.java:170-178
+
+      - id: E3.R3
+        texto: >-
+          Lógica de la Lista de Eventos Futuros (LEF) y del reloj de la
+          simulación.
+        aceptacion:
+          - Se define la estructura del registro de evento (tiempo, tipo, entidad, payload).
+          - Se define el criterio de ordenación y la regla de desempate.
+          - Se da el bucle principal: extraer evento de menor tiempo → avanzar reloj → ejecutar → programar eventos hijos.
+          - Se enumera el catálogo completo de tipos de evento del modelo.
+          - Se declara qué eventos son periódicos y cuáles condicionales.
+        estado: HUECO — es el requisito con menos apoyo en el código actual
+        motivo: >-
+          El motor implementado avanza por incremento fijo de tiempo
+          (GameState.advanceTurn, src/model/GameState.java:55): reloj discreto
+          t ← t+1 con fases fijas dentro del turno. No existe una cola de
+          eventos futuros ordenada por tiempo.
+        salidas_posibles:
+          - id: E3.R3.opcion_A
+            nombre: Reinterpretación formal (recomendada)
+            descripcion: >-
+              Documentar el modelo como simulación por incremento fijo de tiempo
+              y derivar de ahí una LEF equivalente: las 10 fases del turno son
+              eventos con prioridad fija dentro del mismo instante t, y los
+              eventos diferidos reales del modelo (temporada fiscal cada 5
+              turnos, revueltas condicionales, expiración de órdenes) se
+              expresan como entradas programadas. Justificar por qué un sistema
+              de turnos WEGO no necesita cola por tiempo continuo.
+            coste: bajo — solo redacción, el código no cambia
+          - id: E3.R3.opcion_B
+            nombre: Implementar una LEF real
+            descripcion: >-
+              Refactorizar TurnEngine para que endTurn() construya y consuma una
+              PriorityQueue<Evento> ordenada por (tiempo, prioridad de fase,
+              orden de emisión). Da un mapeo 1:1 entre documento y código.
+            coste: alto — toca el motor y las 98 pruebas
+        eventos_periodicos_existentes:
+          - "Fin de turno: cada 1 turno"
+          - "Temporada fiscal: turnos 1, 6, 11, … (Rules.isTaxSeason, cada 5 turnos)"
+          - "Refresco de puntos de acción: cada fin de turno, A = 3 + 0.5·|P_n|"
+        eventos_condicionales_existentes:
+          - "Revuelta en provincia (sorteo Bernoulli por provincia y turno)"
+          - "Muerte del rey (al perder la provincia donde reside)"
+          - "Huida del rey (revuelta en su provincia)"
+          - "Eliminación de nación (sin provincias, o pérdida total tras muerte del rey)"
+          - "Fin de partida (una sola nación viva, o límite de turnos)"
+
+  # ===========================================================================
+  - id: E4
+    titulo: Condiciones de Frontera y Puntos Críticos
+    seccion_documento: 4
+    proposito: >-
+      Definir matemáticamente los límites del sistema y qué ocurre exactamente
+      cuando una variable los alcanza, de modo que el modelo no se rompa en
+      escenarios extremos.
+    ponderacion_rubrica: Tratamiento de Fronteras (15%)
+    requisitos:
+
+      - id: E4.R1
+        texto: >-
+          Definición matemática de los límites de cada variable de estado y del
+          comportamiento del sistema al alcanzarlos.
+        aceptacion:
+          - Tabla variable → dominio → qué ocurre en cada extremo.
+          - Ningún dominio queda sin cerrar por arriba y por abajo.
+        fronteras_implementadas:
+          - variable: "H (felicidad)"
+            dominio: "[0, 100]"
+            regla: "clamp duro; H = 0 → probabilidad de revuelta máxima q = min(0.9, κ·2500) = 0.9 (0.45 con guarnición)"
+            fuente: src/model/Province.java:76-78
+          - variable: "H frente a H* = 50"
+            dominio: "umbral fiscal"
+            regla: "H < 50 → la provincia deja de tributar Y entra en riesgo de revuelta: doble efecto discontinuo"
+            fuente: src/engine/TurnEngine.java:487, 531
+          - variable: "P (población)"
+            dominio: "[0, 1 000 000]"
+            regla: "techo por saturación en el crecimiento; suelo en 0; P = 0 → provincia sin renta ni reclutamiento posible"
+            fuente: src/model/Province.java:64-69
+          - variable: "T (tropas)"
+            dominio: "≥ 0"
+            regla: "el ganador de un combate conserva siempre ≥ 1 soldado; T = 0 → provincia ocupable sin bajas"
+            fuente: src/engine/CombatResolver.java:33, 47-49
+          - variable: "A (puntos de acción)"
+            dominio: "≥ 0"
+            regla: "orden rechazada si el coste supera el saldo; se refresca cada turno"
+            fuente: src/engine/TurnEngine.java:274-281
+          - variable: "|P_n| (territorio)"
+            dominio: "≥ 0"
+            regla: "|P_n| = 0 → nación eliminada en el barrido"
+            fuente: src/engine/TurnEngine.java:602-608
+        hueco_detectado:
+          variable: "E (tesoro)"
+          problema: >-
+            Nation.setGold (src/model/Nation.java:49-51) permite oro negativo
+            sin ninguna consecuencia mecánica: la nación endeudada sigue
+            operando igual. El enunciado pide explícitamente qué ocurre "cuando
+            el déficit económico supera las reservas".
+          accion_requerida: >-
+            Definir la regla de insolvencia en el documento y decidir si se
+            implementa: p. ej. E < 0 → deserción forzosa de tropas hasta
+            reequilibrar el mantenimiento, o penalización de felicidad. Sin esto
+            el criterio "Tratamiento de Fronteras" queda incompleto.
+
+      - id: E4.R2
+        texto: >-
+          Funciones por partes que describan los cambios de estado abruptos del
+          sistema (discontinuidades del modelo).
+        aceptacion:
+          - Cada discontinuidad expresada como función definida a trozos con sus condiciones.
+          - Se identifica el efecto de la discontinuidad sobre la trayectoria del sistema.
+        discontinuidades_a_formalizar:
+          - nombre: Umbral fiscal de la felicidad
+            forma: "Renta(i) = G_max·(P/P_max)·(τ/100) si H ≥ 50 ; 0 si H < 50"
+            efecto: >-
+              Salto de renta a cero, no degradación gradual. Crea un lazo de
+              realimentación positiva: menos renta → menos capacidad de decretos
+              → menos felicidad. Es el punto crítico del subsistema económico.
+          - nombre: Muerte del rey
+            forma: "|P_n| ← max(1, ⌊|P_n|·(1−0.9)⌋) provincias conservadas (las de mayor guarnición); el resto deserta a neutral conservando guarnición"
+            efecto: Colapso territorial abrupto del 90%; con pérdida total, eliminación.
+            fuente: src/engine/TurnEngine.java:575-594
+          - nombre: Resultado de combate
+            forma: "función escalón sobre el signo de F_A − F_D; el empate exacto favorece al defensor"
+            efecto: Bifurcación total del resultado ante un cambio infinitesimal de fuerza.
+          - nombre: Saturación de la probabilidad de revuelta
+            forma: "q = κ·d² si κ·d² < 0.9 ; 0.9 si κ·d² ≥ 0.9  (d = 50 − H)"
+            efecto: >-
+              Saturación a partir de d ≈ 47.4, es decir H ≤ 2.6. Por debajo de
+              ese punto no hay penalización marginal adicional.
+          - nombre: Temporada fiscal
+            forma: "τ modificable ⟺ (t − 1) mod 5 = 0"
+            efecto: Control disponible solo en instantes discretos; entre temporadas la política fiscal está congelada.
+            fuente: src/model/Rules.java:155-157
+          - nombre: Techo poblacional
+            forma: "P_{t+1} = min(P_max, P_t·(1+g))"
+            efecto: Crecimiento geométrico → logístico truncado; renta máxima por provincia acotada.
+
+# -----------------------------------------------------------------------------
+#  RÚBRICA DE EVALUACIÓN
+# -----------------------------------------------------------------------------
+rubrica:
+  - criterio: Rigor Matemático
+    peso: 0.35
+    descripcion: >-
+      Las ecuaciones propuestas tienen sentido lógico, están dimensionalmente
+      balanceadas y explican fielmente la mecánica del juego sin ambigüedades.
+    requisitos_cubiertos: [E2.R1, E2.R2, E2.R3, E2.R4, E2.R5, E2.R6]
+  - criterio: Lógica Algorítmica
+    peso: 0.35
+    descripcion: >-
+      Los diagramas de flujo y el pseudocódigo son claros, secuenciales y
+      contemplan las condiciones necesarias para ser programados posteriormente.
+    requisitos_cubiertos: [E3.R1, E3.R2, E3.R3]
+  - criterio: Coherencia Sistémica
+    peso: 0.15
+    descripcion: >-
+      Las variables definidas en la sección 1 coinciden exactamente con las
+      utilizadas en las ecuaciones matemáticas y en el pseudocódigo.
+    requisitos_cubiertos: [E1.R1, E1.R2, E1.R3]
+    verificacion_sugerida: >-
+      Extraer el conjunto de símbolos de las secciones 2 y 3 y comprobar por
+      diferencia que está contenido en la tabla de la sección 1.
+  - criterio: Tratamiento de Fronteras
+    peso: 0.15
+    descripcion: >-
+      El modelo contempla escenarios extremos (casos borde) y explica cómo el
+      sistema los gestiona sin romperse.
+    requisitos_cubiertos: [E4.R1, E4.R2]
+
+# -----------------------------------------------------------------------------
+#  RIESGOS DEL ENTREGABLE (ordenados por impacto sobre la nota)
+# -----------------------------------------------------------------------------
+riesgos:
+  - id: RG1
+    requisito: E3.R3
+    severidad: alta
+    descripcion: >-
+      La LEF y el reloj de simulación no tienen correlato en el código: el motor
+      es de incremento fijo de tiempo, sin cola de eventos. Pesa dentro del 35%
+      de Lógica Algorítmica.
+    mitigacion: Resolver por E3.R3.opcion_A (redacción) o E3.R3.opcion_B (refactor).
+  - id: RG2
+    requisito: E4.R1
+    severidad: media
+    descripcion: >-
+      No hay regla de insolvencia: el oro negativo no produce ningún efecto. El
+      enunciado pregunta por ese caso de forma literal.
+    mitigacion: Definir la regla en el documento; implementarla es opcional para el Parcial II.
+  - id: RG3
+    requisito: E2.R5
+    severidad: media
+    descripcion: >-
+      El uso de aleatoriedad está implementado pero no formalizado: falta
+      documentar el LCG, la transformada inversa y el papel de la semilla.
+    mitigacion: Redacción; el código ya cumple (semilla en Rules.randomSeed).
+  - id: RG4
+    requisito: E3.R1
+    severidad: baja
+    descripcion: >-
+      El orden recaudación → crecimiento del motor invierte el sugerido por el
+      enunciado. Si no se justifica, se lee como error.
+    mitigacion: Párrafo explícito de justificación en la sección 3.
+  - id: RG5
+    requisito: E1.R1
+    severidad: baja
+    descripcion: >-
+      Riesgo de deriva de símbolos entre secciones (mismo concepto con dos
+      notaciones), que ataca directamente el criterio de Coherencia Sistémica.
+    mitigacion: Fijar la tabla de notación antes de redactar las secciones 2 y 3.

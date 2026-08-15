@@ -1,4 +1,74 @@
-# Age of Conquest — Clon
+# Age of Conquest — Simulación de Sistemas (UNET)
+
+Este repositorio contiene **dos artefactos distintos**, y conviene no confundirlos:
+
+| | `sim/` (Python) | `src/` (Java) |
+|:--|:--|:--|
+| Qué es | **Simulador operacional del Parcial III** | Clon exploratorio de *Age of Conquest IV* |
+| Modelo | El modelo formal de `docs/parcial2/PARCIAL2.md` | Ingeniería inversa del juego (`PLAN.md`) |
+| Tiempo | Eventos discretos con LEF, τ = t + φ | Incremento fijo por turnos (WEGO) |
+| Combate | Estocástico, triangular, ley lineal de Lanchester | Determinista |
+| Estado | **Es lo que se entrega y se defiende** | Exploración previa; se conserva sin cambios |
+
+El informe del Parcial III es [`docs/parcial3/PARCIAL3.pdf`](docs/parcial3/PARCIAL3.pdf);
+el guion de la defensa, [`docs/parcial3/DEFENSA.md`](docs/parcial3/DEFENSA.md).
+
+## El simulador operacional (`sim/`)
+
+Implementa íntegramente el modelo por eventos discretos del Parcial II: reloj τ = t + φ
+con lista de eventos futuros, los diez eventos E1–E10, subsistemas económico,
+demográfico, militar y diplomático, cuatro estrategias de IA, y las condiciones de
+frontera del capítulo 5. Requiere **Python 3.11+** y ninguna dependencia externa.
+
+```bash
+python3 -m sim --traza-dorada   # verifica la traza de escritorio de §4.7 (44/44)
+python3 -m sim --turnos 5       # cinco fases consecutivas con traza de eventos
+python3 -m sim --interactivo    # modo interactivo: entrada de variables e inspección
+python3 -m sim --partida        # partida completa hasta victoria o t_max
+python3 -m sim --caso todos     # los cinco casos borde del capítulo 5
+python3 -m sim --lote 40        # 40 réplicas con intervalos de confianza
+python3 -m sim --barrido        # sensibilidad de K_B con semillas apareadas
+```
+
+Todo es exactamente reproducible: fijados la semilla s₀ y el orden total de la LEF, la
+trayectoria de la simulación es única.
+
+### Estructura
+
+```
+sim/
+  parametros.py   matriz de terreno y los ~35 parámetros del capítulo 2
+  azar.py         LCG de 48 bits y transformada inversa triangular
+  reloj.py        micro-fases, catálogo de eventos, LEF, función de llegada
+  estado.py       vector de estado S(τ) y variables auxiliares
+  economia.py     renta, tesoro, insolvencia, descontento, población
+  militar.py      movimiento, reclutamiento, combate, moral
+  diplomacia.py   guarda diplomática, guerra y alianzas
+  agentes.py      las cuatro estrategias y el árbol de decisión
+  eventos.py      E1–E10, predicados de validez y despachador
+  recolector.py   métricas O1–O5
+  escenario.py    generación y validación del mapa del Anexo C
+  lote.py         réplicas, intervalos de confianza, barridos
+  casos_borde.py  demostraciones de las condiciones de frontera
+  cli.py          interfaz operacional
+escenarios/referencia24.json   mapa congelado: 24 provincias, grado medio 3.50
+tests/test_traza_dorada.py     prueba dorada contra §4.7
+resultados/p3/                 salidas CSV de los experimentos
+```
+
+### Resultados principales
+
+- **Verificación:** 44/44 comprobaciones de la traza de escritorio de §4.7, error
+  relativo máximo 5.1×10⁻⁴. Teoremas 1 y 2 sin violaciones en partidas completas.
+- **Validación predictiva:** el modelo predijo en §3.2.4 que un imperio en guerra
+  permanente no puede alcanzar la victoria (n^max = 13 < 15). En 40 réplicas,
+  **0 ganadores estuvieron en guerra continua**.
+- **Sensibilidad:** K_B afecta a la intensidad bélica de forma monótona (535 → 789
+  bajas) pero no a la duración de la partida.
+
+---
+
+## El clon exploratorio en Java (`src/`)
 
 Clon del juego de estrategia por turnos *Age of Conquest IV* (Noble Master Games),
 desarrollado como proyecto de **Simulación de Sistemas (UNET)**.
@@ -143,4 +213,4 @@ aparecen en el panel *Testing*.
 
 Toda provincia sin dueño es neutral. El mapa debe ser conexo; los errores de formato
 se reportan con `ScenarioException` y un mensaje descriptivo.
-# Age-of-Conquest-Clon
+
