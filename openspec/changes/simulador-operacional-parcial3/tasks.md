@@ -31,7 +31,7 @@
 ## 4. Verificación
 
 - [x] 4.1 `tests/test_traza_dorada.py` — reproducción exacta de la traza de escritorio §4.7 con $R_1=0.7314$, $R_2=0.2891$
-- [ ] 4.2 `tests/test_fronteras.py` — dominios §5.1 y casos degenerados §5.3
+- [x] 4.2 `tests/test_fronteras.py` — dominios §5.1 y casos degenerados §5.3
 - [x] 4.3 Partida completa reproducible sobre `referencia24.json` con $s_0 = 20260805$
 
 ## 5. Interfaz y experimentos

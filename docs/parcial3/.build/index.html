@@ -289,7 +289,32 @@ Los tres teoremas se comprueban en ejecución sobre partidas completas:
 | **Teorema 3** — terminación | toda partida acaba por $\Theta_V$, $m=1$ o $t_{\max}$ | 100 % de las réplicas terminan |
 | Orden total de la LEF | $\varsigma$ único por construcción | sin empates observados |
 
-## 3.3 Verificación del consumo de aleatoriedad
+## 3.3 Condiciones extremas y casos degenerados
+
+Una segunda suite (`tests/test_fronteras.py`) fuerza cada variable a sus fronteras y
+construye cada caso degenerado: **34 comprobaciones, todas superadas**. Entre ellas:
+
+| Comprobación | Resultado observado |
+|:--|:--|
+| $D_p$ satura en 100 con $\theta$ máxima sostenida | $D = [100, 100, 100]$ |
+| $D_p$ satura en 0 con $\theta = 0$ en paz | $D = [0, 0, 0]$ |
+| $L_p$ no supera $L_{\max}$ ni baja de 0 con daño masivo | correcto |
+| $G_i$ nunca queda negativo tras la insolvencia | $G = 0$ |
+| $\mu_a$ satura en $\mu_{\min}$ tras combates encadenados | $\mu = 0.40$ |
+| Régimen determinista favorable, 200 combates | **200/200 victorias** |
+| Imperio sin ejércitos sobrevive y levanta uno nuevo | activo, 4 ejércitos al turno 6 |
+| Terminación bajo 7 configuraciones extremas de parámetros | todas terminan, $\le$ 1603 eventos frente a la cota 14200 |
+| Tres ejecuciones con la misma semilla | resultado idéntico |
+
+**Un hallazgo del proceso.** La comprobación de que $\mu_a$ alcanza $\mu_{\min}$ falló
+inicialmente: un desgaste total de un solo combate dejaba $\mu = 0.5$, no $0.40$. El
+fallo era de la prueba, no del modelo. Como $b_{\text{gan}}/F_a < K_B = 0.7$, el factor
+de (3.29) nunca baja de $1 - \gamma_\mu \cdot 0.7 = 0.65$: **el suelo de moral es
+inalcanzable en una sola batalla y exige tres victorias ajustadas encadenadas**. Es
+precisamente el límite natural a las campañas relámpago que el documento atribuye a este
+mecanismo en §3.6.3, y no era evidente sin ejecutar el modelo.
+
+## 3.4 Verificación del consumo de aleatoriedad
 
 El documento afirma que "cada resolución de combate consume exactamente dos números".
 El generador propio expone un contador que permite comprobarlo: en la partida de
@@ -322,8 +347,8 @@ literatura de simulación, y se declara cuáles se aplican y cuáles no:
 | Técnica de validación | Aplicada | Instrumento |
 |:--|:--:|:--|
 | Trazas (*traces*) | ✔ | traza dorada §4.7, 44/44 (§3.1) |
-| Condiciones extremas | ✔ | los 12 dominios de §5.1 forzados (§5) |
-| Pruebas degeneradas | ✔ | los 9 casos de §5.3 (§5.4) |
+| Condiciones extremas | ✔ | los 12 dominios de §5.1 forzados — 34/34 (§3.3) |
+| Pruebas degeneradas | ✔ | los 9 casos de §5.3 (§3.3 y §5.4) |
 | Valores fijos | ✔ | régimen determinista $k \le 2/3$: victoria garantizada |
 | Validez interna | ✔ | varianza entre réplicas con semillas apareadas (§4.3) |
 | Análisis de sensibilidad | ✔ | barrido de $K_B$ (§4.4) |
@@ -592,8 +617,9 @@ Parcial II se fijó —"un programador independiente debe poder codificar el sis
 
 **Sobre la verificación.** La traza de escritorio de §4.7 resultó ser el instrumento más
 valioso del documento: 44 comprobaciones que ejercitan el 70 % del modelo y detectan
-cualquier alteración de las ecuaciones. Los tres teoremas se sostienen en ejecución sin
-una sola violación.
+cualquier alteración de las ecuaciones. Sumada a la suite de fronteras son **78
+comprobaciones automatizadas**, todas superadas, y los tres teoremas se sostienen en
+ejecución sin una sola violación.
 
 **Sobre la validación.** El resultado más sólido es la confirmación de la predicción de
 §3.2.4: ninguno de 40 ganadores estuvo en guerra continua, tal como la ecuación (3.9)
@@ -625,6 +651,7 @@ Todos los números de este informe se regeneran con:
 
 ```bash
 python3 -m sim --traza-dorada      # verificación §3.1 — 44/44
+python3 tests/test_fronteras.py    # condiciones extremas §3.3 — 34/34
 python3 -m sim --turnos 5          # cinco fases consecutivas
 python3 -m sim --partida           # partida completa, semilla 20260805
 python3 -m sim --caso todos        # los cinco casos borde del §5
