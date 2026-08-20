@@ -74,6 +74,21 @@ public class GameState {
         return Collections.unmodifiableCollection(provinces.values());
     }
 
+    /**
+     * Número de provincias de tierra, N del modelo formal. Las zonas marítimas
+     * no tienen dueño y no pueden conquistarse, así que no forman parte del
+     * denominador de la cuota territorial q_i = n_i / N (§2.2).
+     */
+    public int landProvinceCount() {
+        int n = 0;
+        for (Province p : provinces.values()) {
+            if (!p.isWater()) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     /** ¿Son adyacentes las dos provincias? (el grafo es simétrico tras la carga). */
     public boolean areAdjacent(String provinceA, String provinceB) {
         return province(provinceA).adjacent().contains(province(provinceB).id());

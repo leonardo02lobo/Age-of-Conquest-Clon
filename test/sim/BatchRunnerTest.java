@@ -29,7 +29,7 @@ class BatchRunnerTest {
             assertNotNull(result.winnerId(), "toda partida debe tener ganador");
             assertTrue(result.turns() >= 1 && result.turns() <= 250);
             assertTrue(result.winnerProvinces() >= 1);
-            assertTrue(result.revolts() >= 0);
+            assertTrue(result.insolvencies() >= 0);
             assertEquals("base", result.experiment());
         }
     }
@@ -50,7 +50,7 @@ class BatchRunnerTest {
         assertEquals(0.5, result.value());
         assertEquals("kBeta", result.parameter());
         assertNotNull(result.winnerId());
-        assertTrue(result.revolts() >= 0);
+        assertTrue(result.insolvencies() >= 0);
     }
 
     @Test

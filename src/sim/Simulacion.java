@@ -16,7 +16,7 @@ import model.Rules;
  *
  * Uso:
  *   java -cp "lib/gson-2.11.0.jar:bin" sim.Simulacion \
- *        [escenario.json] [--experimento base|fortificacion|desgaste|revueltas|todos] \
+ *        [escenario.json] [--experimento base|desgaste|fortificacion|sensibilidad_fiscal|crecimiento|todos] \
  *        [--n 100] [--semilla 1000]
  *
  * Cada experimento juega N partidas IA contra IA por valor del parámetro,
@@ -131,13 +131,13 @@ public final class Simulacion {
         double totalTurns = 0;
         int minTurns = Integer.MAX_VALUE;
         int maxTurns = 0;
-        double totalRevolts = 0;
+        double totalInsolvencies = 0;
         for (GameResult r : results) {
             wins.merge(r.winnerId(), 1, Integer::sum);
             totalTurns += r.turns();
             minTurns = Math.min(minTurns, r.turns());
             maxTurns = Math.max(maxTurns, r.turns());
-            totalRevolts += r.revolts();
+            totalInsolvencies += r.insolvencies();
         }
         int n = results.size();
         StringBuilder winners = new StringBuilder();
@@ -146,9 +146,9 @@ public final class Simulacion {
                 .forEach(e -> winners.append(String.format(Locale.ROOT, "%s %.0f%%  ",
                         e.getKey(), 100.0 * e.getValue() / n)));
         System.out.printf(Locale.ROOT,
-                "  %s=%-8s turnos: media %.1f [%d–%d]   revueltas/partida: %.1f   victorias: %s(%d ms)%n",
+                "  %s=%-8s turnos: media %.1f [%d–%d]   insolvencias/partida: %.1f   victorias: %s(%d ms)%n",
                 variant.parameter(), trim(variant.value()), totalTurns / n, minTurns, maxTurns,
-                totalRevolts / n, winners, millis);
+                totalInsolvencies / n, winners, millis);
     }
 
     private static String trim(double v) {

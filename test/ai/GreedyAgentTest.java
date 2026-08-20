@@ -24,12 +24,12 @@ class GreedyAgentTest {
     private static final String IA_MAP = """
             {"nombre": "IA",
              "provincias": [
-               {"id": "capital", "poblacion": 500000, "adyacentes": ["frontera"]},
-               {"id": "frontera", "poblacion": 200000, "adyacentes": ["debil", "fuerte"]},
-               {"id": "debil", "poblacion": 300000, "tropas": 10},
-               {"id": "fuerte", "poblacion": 300000, "tropas": 500, "adyacentes": ["lejos"]},
-               {"id": "lejos", "poblacion": 100000, "tropas": 5, "adyacentes": ["rincon"]},
-               {"id": "rincon", "poblacion": 100000}],
+               {"id": "capital", "poblacion": 10000, "adyacentes": ["frontera"]},
+               {"id": "frontera", "poblacion": 4000, "adyacentes": ["debil", "fuerte"]},
+               {"id": "debil", "poblacion": 6000, "tropas": 10},
+               {"id": "fuerte", "poblacion": 6000, "tropas": 500, "adyacentes": ["lejos"]},
+               {"id": "lejos", "poblacion": 2000, "tropas": 5, "adyacentes": ["rincon"]},
+               {"id": "rincon", "poblacion": 2000}],
              "naciones": [
                {"id": "ia1", "oro": 100, "ia": true, "rey": "capital",
                 "provincias": {"capital": 30, "frontera": 60}},
@@ -108,8 +108,8 @@ class GreedyAgentTest {
         String json = """
                 {"nombre": "Duelo",
                  "provincias": [
-                   {"id": "a", "poblacion": 500000, "adyacentes": ["b"]},
-                   {"id": "b", "poblacion": 100000}],
+                   {"id": "a", "poblacion": 10000, "adyacentes": ["b"]},
+                   {"id": "b", "poblacion": 2000}],
                  "naciones": [
                    {"id": "ia1", "oro": 100, "ia": true, "rey": "a", "provincias": {"a": 100}},
                    {"id": "otro", "oro": 100, "ia": false, "provincias": {"b": 10}}]}

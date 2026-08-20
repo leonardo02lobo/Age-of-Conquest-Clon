@@ -58,9 +58,9 @@ public sealed interface Order {
     }
 
     /**
-     * Cambiar la tasa impositiva de la nación. Solo es válido durante la
-     * temporada fiscal y con una de las tasas permitidas (0/50/100/150/200).
-     * Surte efecto inmediato.
+     * Cambiar la tasa impositiva θ_i de la nación. El modelo formal la trata
+     * como variable de decisión continua en [0, θ_max] (refinamiento O1 de
+     * §1.3), disponible en cualquier turno. Surte efecto inmediato.
      */
     record SetTaxRate(String nationId, int rate) implements Order {
     }

@@ -64,13 +64,21 @@ el alcance de la validación (§4.1).
 ## 1.3 Relación con el clon exploratorio del repositorio
 
 El repositorio contiene además un clon jugable de *Age of Conquest IV* en Java
-(`src/`, 4.470 líneas, 98 pruebas), desarrollado en una fase previa por ingeniería
-inversa del juego. Ese clon **implementa un modelo distinto**: motor de incremento fijo
-de tiempo, combate determinista, felicidad decreciente, revueltas Monte Carlo, rey y
-puntos de acción. Sirvió para explorar las mecánicas del sistema real y es el origen de
-buena parte del conocimiento que fundamenta las abstracciones de §1.2, pero **no es el
-modelo operacional que este informe defiende**. El simulador del Parcial III es el
-paquete `sim/` en Python, escrito contra el documento formal.
+(`src/`, 3.500 líneas, 86 pruebas), nacido en una fase previa por ingeniería inversa
+del juego y **reescrito después contra el mismo documento formal**: comparte con `sim/`
+las ecuaciones (3.1)–(3.21), el generador LCG y la tabla de estrategias §2.4.9. Difiere
+en el paradigma temporal —motor WEGO de incremento fijo frente a la LEF por eventos
+discretos— y en el alcance: conserva mecánicas del juego real ajenas al modelo formal
+(rey, saqueo, decretos, viaje naval) y **no implementa el subsistema de moral**
+(ec. 3.27–3.29), porque su estado no tiene la entidad Ejército con identidad propia que
+$\mu_a$ requiere.
+
+Esa coincidencia parcial es útil y no accidental: disponer de **dos implementaciones
+independientes del mismo modelo bajo paradigmas de tiempo distintos** permite
+contrastarlas entre sí, que es la técnica de *model-to-model validation* declarada como
+«parcial» en la tabla de §4.1. Aun así, el modelo operacional que este informe defiende
+es el paquete `sim/` en Python: es el único que implementa el modelo formal **completo**,
+incluidas la LEF, la moral y las condiciones de frontera del capítulo 5.
 
 ---
 

@@ -26,7 +26,14 @@ import model.TerrainType;
  *   - E4 (Combate): ec. 3.14–3.21 (resolución estocástica con terreno)
  *   - E7/E8 (Diplomacia): ec. 3.30–3.32 (coalición, alianzas)
  *   - E9 (Fin de Turno): ec. 3.6–3.7 (descontento), ec. 3.10 (población),
- *                         ec. 3.28 (moral)
+ *                         victoria por cuota Θ_V
+ *
+ * Limitación declarada: el subsistema de moral (ec. 3.27–3.29) NO está
+ * implementado. Este motor no tiene la entidad Ejército con identidad propia
+ * que μ_a requiere: las tropas son un escalar por provincia. El combate usa
+ * por tanto μ_a ≡ 1.0, y los parámetros μ_min, λ_d, ρ_μ y γ_μ de Rules quedan
+ * reservados. La implementación completa de la moral está en el simulador
+ * operacional del Parcial III (`sim/militar.py`).
  */
 public class TurnEngine {
 
@@ -259,7 +266,7 @@ public class TurnEngine {
         // E1: Economía — ec. 3.1–3.5
         resolveEconomy(report);
 
-        // E9: Fin de turno — ec. 3.6–3.7 (descontento), ec. 3.10 (población), ec. 3.28 (moral)
+        // E9: Fin de turno — ec. 3.6–3.7 (descontento), ec. 3.10 (población)
         resolveEndOfTurn(report);
 
         sweepEliminations(report);
@@ -306,7 +313,10 @@ public class TurnEngine {
         }
         if (leader == null) return;
 
-        double qL = (double) maxProvinces / state.provinces().size();
+        // q_ℓ sobre provincias de tierra: las marítimas no son conquistables y
+        // diluirían la cuota, impidiendo que se alcance nunca θ_am.
+        int landCount = state.landProvinceCount();
+        double qL = landCount == 0 ? 0.0 : (double) maxProvinces / landCount;
 
         // E7: coalición anti-líder (B3) — ec. 3.30
         if (qL >= rules.thetaAm) {
@@ -503,8 +513,11 @@ public class TurnEngine {
         // Descontento de la provincia
         double discontent = target.discontent();
 
+        // Ambas potencias se evalúan sobre el terreno de la provincia disputada T_p:
+        // (3.14) usa T(T_p, ATQ) y (3.15) usa T(T_p, DEF). Pasar aquí un terreno
+        // fijo anularía la columna de ataque de la matriz de terreno §2.4.6.
         CombatResolver.Outcome outcome = CombatResolver.resolve(
-                troops, attackerMorale, TerrainType.LLANURA,
+                troops, attackerMorale, target.terrain(),
                 defenders, fortLevel, target.terrain(),
                 discontent, rules, lcg);
 
@@ -624,14 +637,16 @@ public class TurnEngine {
         }
     }
 
-    // --------------------------------------- E9: Fin de turno (ec. 3.6–3.7, 3.10, 3.28)
+    // --------------------------------------- E9: Fin de turno (ec. 3.6–3.7, 3.10)
 
     /**
      * E9 — Fin de turno:
      *   ΔD_p = η_θ(θ−θ_0) + η_w·1[guerra] + η_n·max(0, n_i−n*) − η_r  (ec. 3.6)
      *   D_p = clamp(D_p + ΔD, 0, 100)                                     (ec. 3.7)
      *   L_p = min(L_max, L_p·(1+g_L)) − ϱ·β_p                             (ec. 3.10)
-     *   μ_a = min(μ̄_a, μ_a + ρ_μ)                                         (ec. 3.28)
+     *
+     * La regeneración de moral (ec. 3.28) no se aplica: ver la limitación
+     * declarada en la cabecera de la clase.
      */
     private void resolveEndOfTurn(TurnReport report) {
         for (Nation nation : state.livingNations()) {
@@ -712,6 +727,23 @@ public class TurnEngine {
             report.add("### " + living.get(0).name() + " domina el mapa: ¡victoria! ###");
             return;
         }
+
+        // E9 — victoria por cuota territorial: q_ℓ = n_ℓ / N ≥ Θ_V.
+        // N cuenta solo provincias de tierra: las marítimas no son conquistables.
+        int land = state.landProvinceCount();
+        if (land > 0) {
+            for (Nation nation : living) {
+                double quota = (double) state.provincesOf(nation.id()).size() / land;
+                if (quota >= rules.thetaV) {
+                    report.setWinnerId(nation.id());
+                    report.add(String.format(
+                            "### %s controla el %.0f%% del mapa (Θ_V = %.0f%%): ¡victoria! ###",
+                            nation.name(), quota * 100, rules.thetaV * 100));
+                    return;
+                }
+            }
+        }
+
         if (rules.tMax > 0 && state.turn() >= rules.tMax) {
             Nation winner = living.stream()
                     .max(Comparator

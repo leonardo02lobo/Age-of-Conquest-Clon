@@ -53,7 +53,7 @@ public class BatchRunner {
         TurnEngine engine = new TurnEngine(state);
         GreedyAgent agent = new GreedyAgent();
 
-        int revolts = 0;
+        int insolvencies = 0;
         TurnReport last = null;
         while (!engine.isGameOver()) {
             for (Nation nation : state.livingNations()) {
@@ -62,13 +62,13 @@ public class BatchRunner {
             last = engine.endTurn();
             for (String event : last.events()) {
                 if (event.contains("insolvencia") || event.contains("INSOLVENCIA")) {
-                    revolts++;
+                    insolvencies++;
                 }
             }
         }
 
         String winnerId = last.winnerId();
         return new GameResult(experiment, parameter, value, seed, winnerId, last.turn(),
-                revolts, state.provincesOf(winnerId).size(), state.totalTroops(winnerId));
+                insolvencies, state.provincesOf(winnerId).size(), state.totalTroops(winnerId));
     }
 }

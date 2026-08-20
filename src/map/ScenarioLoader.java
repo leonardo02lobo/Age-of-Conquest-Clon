@@ -88,7 +88,16 @@ public final class ScenarioLoader {
             if (water && population > 0) {
                 throw new ScenarioException("La zona marítima '" + id + "' no puede tener población");
             }
-            p.setPopulation(Math.min(population, rules.lMax));
+            // L_max es el techo poblacional del modelo formal (§2.4.8). Recortar en
+            // silencio un escenario fuera de escala igualaría todas las provincias
+            // al mismo valor y destruiría la heterogeneidad económica del mapa; se
+            // rechaza con un error descriptivo, como el resto de validaciones.
+            if (population > rules.lMax) {
+                throw new ScenarioException("La provincia '" + id + "' declara "
+                        + population + " habitantes y excede L_max = " + rules.lMax
+                        + "; reescale el escenario al rango del modelo formal");
+            }
+            p.setPopulation(population);
 
             // Terreno (default: LLANURA)
             if (!water && obj.has("terreno")) {
