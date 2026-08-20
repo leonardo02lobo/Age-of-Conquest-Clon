@@ -68,30 +68,35 @@ public final class Simulacion {
     private static Map<String, List<Variant>> experiments() {
         Map<String, List<Variant>> experiments = new LinkedHashMap<>();
 
-        // Configuración de referencia: solo la variabilidad Monte Carlo de las revueltas.
-        experiments.put("base", List.of(new Variant("base", 0, r -> {
-        })));
+        experiments.put("base", List.of(new Variant("base", 0, r -> {})));
 
-        // ¿Cuánto estabiliza (o alarga) la partida el bono defensivo de fortificar?
+        // Coeficiente de bajas K_B: letalidad del combate (ec. 3.19)
+        List<Variant> kb = new ArrayList<>();
+        for (double v : new double[]{0.3, 0.5, 0.7, 0.9, 1.0}) {
+            kb.add(new Variant("kBeta", v, r -> r.kBeta = v));
+        }
+        experiments.put("desgaste", kb);
+
+        // Bonificación defensiva por fortificación β_F (ec. 3.16)
         List<Variant> fort = new ArrayList<>();
-        for (double v : new double[]{0.0, 0.25, 0.5, 0.75, 1.0}) {
-            fort.add(new Variant("fortDefenseBonus", v, r -> r.fortDefenseBonus = v));
+        for (double v : new double[]{0.0, 0.10, 0.15, 0.25, 0.40}) {
+            fort.add(new Variant("betaF", v, r -> r.betaF = v));
         }
         experiments.put("fortificacion", fort);
 
-        // Letalidad del combate: φ bajo = guerras baratas; φ alto = victorias pírricas.
-        List<Variant> attrition = new ArrayList<>();
-        for (double v : new double[]{0.3, 0.5, 0.7, 0.9, 1.0}) {
-            attrition.add(new Variant("combatAttrition", v, r -> r.combatAttrition = v));
+        // Sensibilidad fiscal η_θ (ec. 3.6)
+        List<Variant> eta = new ArrayList<>();
+        for (double v : new double[]{0.02, 0.04, 0.06, 0.10, 0.15}) {
+            eta.add(new Variant("etaTheta", v, r -> r.etaTheta = v));
         }
-        experiments.put("desgaste", attrition);
+        experiments.put("sensibilidad_fiscal", eta);
 
-        // Riesgo de revuelta: el componente estocástico del modelo.
-        List<Variant> revolts = new ArrayList<>();
-        for (double v : new double[]{0.0, 2e-4, 4e-4, 8e-4, 1.6e-3}) {
-            revolts.add(new Variant("revoltRiskK", v, r -> r.revoltRiskK = v));
+        // Tasa de crecimiento poblacional g_L (ec. 3.10)
+        List<Variant> growth = new ArrayList<>();
+        for (double v : new double[]{0.005, 0.01, 0.02, 0.03, 0.05}) {
+            growth.add(new Variant("gL", v, r -> r.gL = v));
         }
-        experiments.put("revueltas", revolts);
+        experiments.put("crecimiento", growth);
 
         return experiments;
     }

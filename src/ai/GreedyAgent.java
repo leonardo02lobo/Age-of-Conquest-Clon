@@ -12,71 +12,246 @@ import java.util.List;
 import java.util.Map;
 import model.DiplomaticState;
 import model.GameState;
+import model.LCG;
 import model.Nation;
 import model.Province;
 import model.Rules;
+import model.TerrainType;
 
 /**
- * IA heurística "codiciosa" (fase M4 del plan):
+ * IA con las 4 estrategias del modelo formal (tabla §1.9):
  *
- *   1. Ajusta la tasa impositiva en temporada fiscal según la felicidad media.
- *   2. Apaga incendios: decreta fiestas en las provincias más descontentas.
- *   3. Ataca neutrales o enemigos solo con ventaja ≥ {@link #attackAdvantage}
- *      sobre la defensa efectiva (fortificación y rey incluidos).
- *   4. Si no queda nada que conquistar y domina militarmente a un vecino,
- *      le declara la guerra.
- *   5. Refuerza la frontera: las tropas del interior avanzan hacia el borde
- *      (BFS multi-fuente sobre el territorio propio).
- *   6. Fortifica la provincia del rey y recluta con el excedente de oro.
+ *   AGRESIVA  — θ=125%, f_rec=0.90, γ_atq=1.1, γ_σ=1.2, f_gua=0.15, f_fort=0.05
+ *   DEFENSIVA — θ=100%, f_rec=0.60, γ_atq=1.8, γ_σ=2.5, f_gua=0.50, f_fort=0.40
+ *   ECONÓMICA — θ=θ_eq, f_rec=0.30, γ_atq=2.0, γ_σ=3.0, f_gua=0.40, f_fort=0.25
+ *   EQUILIBRADA — θ=½(100+θ_eq), f_rec=0.70, γ_atq=1.4, γ_σ=1.8, f_gua=0.30, f_fort=0.20
  *
- * Es determinista: toda la aleatoriedad de la partida queda en las revueltas.
- * Los umbrales son públicos y calibrables (material para los experimentos de
- * simulación e incluso para el calibrado genético de la fase M8).
+ * La estrategia de cada nación se asigna por su tasa impositiva inicial
+ * (o se puede fijar externamente).
  */
 public class GreedyAgent implements Agent {
 
-    /** Ventaja mínima (fuerza propia / defensa efectiva) para lanzar un ataque. */
-    public double attackAdvantage = 1.5;
-
-    /** Oro que la IA nunca gasta (colchón para el mantenimiento). */
-    public double goldReserve = 30.0;
-
-    /** Bajo esta felicidad la IA decreta fiestas en la provincia. */
-    public double unhappyThreshold = 45.0;
-
-    /** Felicidad media bajo la cual baja impuestos, y sobre la cual los sube. */
-    public double lowerTaxBelow = 50.0;
-    public double raiseTaxAbove = 80.0;
-
-    /** Soldados que siempre quedan de guarnición al mover o atacar. */
-    public int garrisonLeft = 1;
-
-    /** Superioridad total (tropas propias / ajenas) para declarar una guerra. */
-    public double declareWarSuperiority = 2.0;
-
-    /** Máximo de decretos de felicidad por turno. */
-    public int maxDecreesPerTurn = 3;
+    private final LCG lcg = new LCG(20260805L);
 
     @Override
     public void plan(TurnEngine engine, Nation nation) {
         GameState state = engine.state();
+        Rules rules = state.rules();
         List<Province> owned = state.provincesOf(nation.id());
-        if (owned.isEmpty()) {
-            return;
-        }
-        adjustTaxes(engine, nation, state, owned);
-        calmUnrest(engine, nation, owned);
-        boolean conqueredSomething = attack(engine, nation, state, owned);
-        if (!conqueredSomething) {
-            declareWarIfDominant(engine, nation, state, owned);
-            attack(engine, nation, state, owned); // reintenta con la guerra nueva
-        }
-        reinforceFrontier(engine, nation, state);
-        fortifyKingSeat(engine, nation, state);
-        recruit(engine, nation, state);
+        if (owned.isEmpty()) return;
+
+        Rules.Strategy strategy = detectStrategy(nation, rules);
+
+        declareWarsIfNeeded(engine, nation, rules, strategy, owned);
+
+        recruitByStrategy(engine, nation, rules, strategy, owned);
+        fortifyByStrategy(engine, nation, rules, strategy, owned);
+        attackByStrategy(engine, nation, rules, strategy, owned);
+        adjustTaxesByStrategy(engine, nation, rules, strategy, owned);
     }
 
-    /** Emite una orden; devuelve false si el motor la rechaza (AP, oro, etc.). */
+    /**
+     * Detecta la estrategia de una nación según su tasa impositiva.
+     */
+    private Rules.Strategy detectStrategy(Nation nation, Rules rules) {
+        int tax = nation.taxRate();
+        if (tax >= 125) return Rules.Strategy.AGRESIVA;
+        if (tax <= 50) return Rules.Strategy.ECONOMICA;
+        if (tax == 100) return Rules.Strategy.DEFENSIVA;
+        return Rules.Strategy.EQUILIBRADA;
+    }
+
+    // -------------------------------------------------------------- reclutamiento
+
+    /**
+     * F2: u_i(t) = floor(f_rec(σ) · G_i(t) / c_u) — ec. 3.11
+     * Se recluta en la capital (o provincia con más población).
+     */
+    private void recruitByStrategy(TurnEngine engine, Nation nation, Rules rules,
+                                   Rules.Strategy strategy, List<Province> owned) {
+        double budget = nation.gold();
+        double fRec = rules.fRecForStrategy(strategy);
+        int units = (int) Math.floor(fRec * budget / rules.cU);
+        if (units < 1) return;
+
+        // Reclutar donde está el rey (capital) o la provincia más poblada
+        Province where = null;
+        if (nation.kingProvinceId() != null) {
+            where = state(engine).province(nation.kingProvinceId());
+        }
+        if (where == null) {
+            for (Province p : owned) {
+                if (where == null || p.population() > where.population()) {
+                    where = p;
+                }
+            }
+        }
+        if (where == null) return;
+
+        // Capacidad de población: L_p / ϱ
+        int byPopulation = (int) (where.population() / Math.max(1, rules.rho));
+        int soldiers = Math.min(units, byPopulation);
+        if (soldiers >= 1) {
+            tryOrder(engine, new Order.Recruit(nation.id(), where.id(), soldiers));
+        }
+    }
+
+    // -------------------------------------------------------------- fortificación
+
+    /**
+     * Fortificar la frontera con menor fuerza defensiva.
+     * Prioridad = f_fort(σ) de la tabla 1.9.
+     */
+    private void fortifyByStrategy(TurnEngine engine, Nation nation, Rules rules,
+                                   Rules.Strategy strategy, List<Province> owned) {
+        double fFort = rules.fFortForStrategy(strategy);
+        if (fFort <= 0) return;
+        if (nation.gold() < rules.cPhi) return;
+
+        // Buscar provincia fronteriza con menor defensa
+        Province best = null;
+        int bestDefense = Integer.MAX_VALUE;
+        for (Province p : owned) {
+            if (p.fortification() >= rules.phiMax) continue;
+            int defense = p.troops() + p.fortification() * 5;
+            if (defense < bestDefense) {
+                // Verificar si es frontera
+                for (Province adj : state(engine).reachableFrom(p.id())) {
+                    if (!nation.id().equals(adj.ownerId())) {
+                        best = p;
+                        bestDefense = defense;
+                        break;
+                    }
+                }
+            }
+        }
+        if (best != null) {
+            tryOrder(engine, new Order.Fortify(nation.id(), best.id()));
+        }
+    }
+
+    // -------------------------------------------------------------- ataque
+
+    /**
+     * Selecciona objetivos según γ_atq(σ) — la ventaja mínima para atacar.
+     * F_env = F_a · (1 − f_gua(σ)) — tropas disponibles tras留守.
+     */
+    private void attackByStrategy(TurnEngine engine, Nation nation, Rules rules,
+                                  Rules.Strategy strategy, List<Province> owned) {
+        double gammaAtq = rules.gammaAtqForStrategy(strategy);
+        double fGua = rules.fGuaForStrategy(strategy);
+
+        for (Province from : owned) {
+            int totalTroops = from.troops();
+            int retained = (int) Math.ceil(totalTroops * fGua);
+            int available = totalTroops - retained;
+            if (available < 1) continue;
+
+            Province best = null;
+            for (Province target : state(engine).reachableFrom(from.id())) {
+                if (!isAttackable(nation, state(engine), target)) continue;
+
+                // P_a = F_env · μ_a · T(T_p, ATQ) — determinista (μ=1, T=1 para planificar)
+                double pA = available * 1.0 * TerrainType.LLANURA.attackModifier;
+
+                // P_d = D_p · Φ(φ) · T(T_p, DEF) · Ψ(D_p)
+                double fortBonus = 1.0 + rules.betaF * target.fortification();
+                double psi = 1.0 - 0.4 * target.discontent() / 100.0;
+                double pD = Math.max(1, target.troops()) * fortBonus
+                        * target.terrain().defenseModifier * psi;
+
+                if (pA >= gammaAtq * pD) {
+                    if (best == null || target.population() > best.population()) {
+                        best = target;
+                    }
+                }
+            }
+
+            if (best != null) {
+                tryOrder(engine, new Order.Move(nation.id(), from.id(), best.id(), available, false));
+            }
+        }
+    }
+
+    private boolean isAttackable(Nation nation, GameState state, Province target) {
+        if (target.isWater() || nation.id().equals(target.ownerId())) return false;
+        return target.ownerId() == null
+                || state.relation(nation.id(), target.ownerId()) == DiplomaticState.GUERRA;
+    }
+
+    // -------------------------------------------------------------- impuestos
+
+    /**
+     * Ajusta la tasa impositiva según la estrategia:
+     *   ECONÓMICA: θ = θ_eq (ec. 3.8)
+     *   EQUILIBRADA: θ = ½(100 + θ_eq)
+     *   AGRESIVA: θ = 125 (fijo)
+     *   DEFENSIVA: θ = 100 (fijo)
+     */
+    private void adjustTaxesByStrategy(TurnEngine engine, Nation nation, Rules rules,
+                                       Rules.Strategy strategy, List<Province> owned) {
+        int targetTax;
+        switch (strategy) {
+            case ECONOMICA -> {
+                double thetaEq = thetaEq(rules, owned.size(), isAtWar(engine.state(), nation));
+                targetTax = (int) Math.round(Math.max(0, Math.min(rules.thetaMax, thetaEq)));
+            }
+            case EQUILIBRADA -> {
+                double thetaEq = thetaEq(rules, owned.size(), isAtWar(engine.state(), nation));
+                targetTax = (int) Math.round(Math.max(0, Math.min(rules.thetaMax,
+                        (100 + thetaEq) / 2.0)));
+            }
+            case AGRESIVA -> targetTax = 125;
+            case DEFENSIVA -> targetTax = 100;
+            default -> targetTax = nation.taxRate();
+        }
+        if (targetTax != nation.taxRate()) {
+            tryOrder(engine, new Order.SetTaxRate(nation.id(), targetTax));
+        }
+    }
+
+    /**
+     * θ_eq = θ_0 + (η_r − η_w·1[guerra] − η_n·max(0, n−n*)) / η_θ — ec. 3.8
+     */
+    private double thetaEq(Rules rules, int numProvinces, boolean atWar) {
+        double guerra = atWar ? rules.etaW : 0;
+        double sobreextension = rules.etaN * Math.max(0, numProvinces - rules.nStar);
+        return rules.theta0 + (rules.etaR - guerra - sobreextension) / rules.etaTheta;
+    }
+
+    private boolean isAtWar(GameState state, Nation nation) {
+        for (Nation other : state.livingNations()) {
+            if (!other.id().equals(nation.id())
+                    && state.relation(nation.id(), other.id()) == DiplomaticState.GUERRA) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void declareWarsIfNeeded(TurnEngine engine, Nation nation, Rules rules,
+                                      Rules.Strategy strategy, List<Province> owned) {
+        double gammaSigma = rules.gammaSigmaForStrategy(strategy);
+        double myTroops = owned.stream().mapToInt(Province::troops).sum();
+
+        for (Province p : owned) {
+            for (Province adj : engine.state().reachableFrom(p.id())) {
+                if (adj.isWater() || nation.id().equals(adj.ownerId())) continue;
+                if (adj.ownerId() != null
+                        && state(engine).relation(nation.id(), adj.ownerId()) != DiplomaticState.NEUTRAL) {
+                    continue;
+                }
+                double theirTroops = adj.ownerId() == null ? 1 : Math.max(1, state(engine).totalTroops(adj.ownerId()));
+                if (myTroops / theirTroops >= gammaSigma) {
+                    if (adj.ownerId() != null) {
+                        tryOrder(engine, new Order.DeclareWar(nation.id(), adj.ownerId()));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     private boolean tryOrder(TurnEngine engine, Order order) {
         try {
             engine.submit(order);
@@ -86,215 +261,7 @@ public class GreedyAgent implements Agent {
         }
     }
 
-    // -------------------------------------------------------------- impuestos
-
-    private void adjustTaxes(TurnEngine engine, Nation nation, GameState state, List<Province> owned) {
-        if (!state.rules().isTaxSeason(state.turn())) {
-            return;
-        }
-        double totalHappiness = 0;
-        for (Province p : owned) {
-            totalHappiness += p.happiness();
-        }
-        double average = totalHappiness / owned.size();
-        int[] rates = state.rules().allowedTaxRates;
-        int index = 0;
-        for (int i = 0; i < rates.length; i++) {
-            if (rates[i] == nation.taxRate()) {
-                index = i;
-            }
-        }
-        if (average < lowerTaxBelow && index > 0) {
-            tryOrder(engine, new Order.SetTaxRate(nation.id(), rates[index - 1]));
-        } else if (average > raiseTaxAbove && index < rates.length - 1) {
-            tryOrder(engine, new Order.SetTaxRate(nation.id(), rates[index + 1]));
-        }
-    }
-
-    // -------------------------------------------------------------- felicidad
-
-    private void calmUnrest(TurnEngine engine, Nation nation, List<Province> owned) {
-        List<Province> unhappy = new ArrayList<>(owned);
-        unhappy.removeIf(p -> p.happiness() >= unhappyThreshold);
-        unhappy.sort(Comparator.comparingDouble(Province::happiness));
-        int issued = 0;
-        for (Province p : unhappy) {
-            if (issued >= maxDecreesPerTurn || nation.gold() < goldReserve) {
-                break;
-            }
-            if (tryOrder(engine, new Order.Decree(nation.id(), p.id(), Order.DecreeType.FIESTA))) {
-                issued++;
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- ataques
-
-    /** Lanza los ataques rentables. Devuelve true si ordenó al menos uno. */
-    private boolean attack(TurnEngine engine, Nation nation, GameState state, List<Province> owned) {
-        boolean attacked = false;
-        for (Province from : owned) {
-            int available = from.troops() - garrisonLeft;
-            if (available < 1) {
-                continue;
-            }
-            Province best = null;
-            for (Province target : state.reachableFrom(from.id())) {
-                if (!isAttackable(nation, state, target)) {
-                    continue;
-                }
-                if (available < attackAdvantage * effectiveDefense(state, target)) {
-                    continue;
-                }
-                if (best == null || target.population() > best.population()) {
-                    best = target; // conquistar población es conquistar impuestos
-                }
-            }
-            if (best != null
-                    && tryOrder(engine, new Order.Move(nation.id(), from.id(), best.id(), available, false))) {
-                attacked = true;
-            }
-        }
-        return attacked;
-    }
-
-    private boolean isAttackable(Nation nation, GameState state, Province target) {
-        if (target.isWater() || nation.id().equals(target.ownerId())) {
-            return false;
-        }
-        return target.ownerId() == null
-                || state.relation(nation.id(), target.ownerId()) == DiplomaticState.GUERRA;
-    }
-
-    /** Fuerza defensiva efectiva de una provincia (tropas, fortificación y rey). */
-    private double effectiveDefense(GameState state, Province target) {
-        Rules rules = state.rules();
-        double bonus = target.isFortified() ? rules.fortDefenseBonus : 0;
-        if (target.ownerId() != null
-                && target.id().equals(state.nation(target.ownerId()).kingProvinceId())) {
-            bonus += rules.kingCombatBonus;
-        }
-        return Math.max(1, target.troops()) * (1 + bonus);
-    }
-
-    // ------------------------------------------------------------- diplomacia
-
-    private void declareWarIfDominant(TurnEngine engine, Nation nation, GameState state,
-                                      List<Province> owned) {
-        for (Nation other : state.livingNations()) {
-            if (nation.relation(other.id()) == DiplomaticState.GUERRA) {
-                return; // una guerra a la vez
-            }
-        }
-        int myTroops = state.totalTroops(nation.id());
-        Nation weakest = null;
-        for (Province from : owned) {
-            for (Province target : state.reachableFrom(from.id())) {
-                String otherId = target.ownerId();
-                if (otherId == null || otherId.equals(nation.id())) {
-                    continue;
-                }
-                Nation other = state.nation(otherId);
-                if (myTroops >= declareWarSuperiority * Math.max(1, state.totalTroops(otherId))
-                        && (weakest == null || state.totalTroops(otherId) < state.totalTroops(weakest.id()))) {
-                    weakest = other;
-                }
-            }
-        }
-        if (weakest != null) {
-            tryOrder(engine, new Order.DeclareWar(nation.id(), weakest.id()));
-        }
-    }
-
-    // ------------------------------------------------------------- movimiento
-
-    /**
-     * Mueve las tropas del interior un paso hacia la frontera, siguiendo un
-     * BFS multi-fuente desde las provincias fronterizas por territorio propio.
-     */
-    private void reinforceFrontier(TurnEngine engine, Nation nation, GameState state) {
-        List<Province> owned = state.provincesOf(nation.id());
-        Map<String, Integer> distance = distanceToBorder(nation, state, owned);
-        for (Province p : owned) {
-            Integer dist = distance.get(p.id());
-            if (dist == null || dist == 0 || p.troops() <= garrisonLeft) {
-                continue; // frontera, aislada o sin excedente
-            }
-            for (Province neighbor : state.reachableFrom(p.id())) {
-                Integer neighborDist = distance.get(neighbor.id());
-                if (neighborDist != null && neighborDist < dist) {
-                    tryOrder(engine, new Order.Move(nation.id(), p.id(), neighbor.id(),
-                            p.troops() - garrisonLeft, false));
-                    break;
-                }
-            }
-        }
-    }
-
-    private Map<String, Integer> distanceToBorder(Nation nation, GameState state, List<Province> owned) {
-        Map<String, Integer> distance = new HashMap<>();
-        Deque<Province> queue = new ArrayDeque<>();
-        for (Province p : owned) {
-            for (Province neighbor : state.reachableFrom(p.id())) {
-                if (!nation.id().equals(neighbor.ownerId())) {
-                    distance.put(p.id(), 0);
-                    queue.add(p);
-                    break;
-                }
-            }
-        }
-        while (!queue.isEmpty()) {
-            Province current = queue.poll();
-            for (Province neighbor : state.reachableFrom(current.id())) {
-                if (nation.id().equals(neighbor.ownerId()) && !distance.containsKey(neighbor.id())) {
-                    distance.put(neighbor.id(), distance.get(current.id()) + 1);
-                    queue.add(neighbor);
-                }
-            }
-        }
-        return distance;
-    }
-
-    // ------------------------------------------------------- fortificar y reclutar
-
-    private void fortifyKingSeat(TurnEngine engine, Nation nation, GameState state) {
-        String kingSeat = nation.kingProvinceId();
-        if (kingSeat == null) {
-            return;
-        }
-        Province seat = state.province(kingSeat);
-        if (!seat.isFortified()
-                && nation.gold() >= goldReserve + state.rules().goldCostFortify) {
-            tryOrder(engine, new Order.Fortify(nation.id(), kingSeat));
-        }
-    }
-
-    private void recruit(TurnEngine engine, Nation nation, GameState state) {
-        Rules rules = state.rules();
-        double budget = nation.gold() - goldReserve;
-        if (budget < 1) {
-            return;
-        }
-        // Recluta donde está el rey (defensa de la capital); si no, en la
-        // provincia propia más poblada.
-        Province where = null;
-        if (nation.kingProvinceId() != null) {
-            where = state.province(nation.kingProvinceId());
-        } else {
-            for (Province p : state.provincesOf(nation.id())) {
-                if (where == null || p.population() > where.population()) {
-                    where = p;
-                }
-            }
-        }
-        if (where == null) {
-            return;
-        }
-        int affordable = (int) (budget / rules.recruitGoldPerSoldier);
-        int byPopulation = (int) (where.population() / Math.max(1, rules.recruitPopulationPerSoldier));
-        int soldiers = Math.min(affordable, byPopulation);
-        if (soldiers >= 1) {
-            tryOrder(engine, new Order.Recruit(nation.id(), where.id(), soldiers));
-        }
+    private GameState state(TurnEngine engine) {
+        return engine.state();
     }
 }

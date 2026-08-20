@@ -15,16 +15,13 @@ import model.Nation;
 import model.Rules;
 
 /**
- * Ejecuta partidas completas IA contra IA por lotes: el instrumento de
- * experimentación del estudio de simulación. Cada partida se juega sobre una
- * copia fresca del escenario, con su propia semilla y su propia configuración
- * de {@link Rules}; todas las naciones las lleva {@link GreedyAgent}, así que
- * la única fuente de variabilidad entre semillas son las revueltas.
+ * Ejecuta partidas completas IA contra IA por lotes.
+ * Cada partida se juega sobre una copia fresca del escenario,
+ * con su propia semilla y su propia configuración de Rules.
  */
 public class BatchRunner {
 
-    /** Tope de turnos por partida: garantiza la terminación del experimento. */
-    public int maxTurnsPerGame = 150;
+    public int maxTurnsPerGame = 200;
 
     private final String scenarioJson;
 
@@ -36,11 +33,6 @@ public class BatchRunner {
         this.scenarioJson = scenarioJson;
     }
 
-    /**
-     * Juega {@code n} partidas con semillas {@code baseSeed}, {@code baseSeed+1}, …
-     * Usar las mismas semillas entre variantes de un experimento produce
-     * comparaciones apareadas (misma secuencia de azar, distinto parámetro).
-     */
     public List<GameResult> run(String experiment, String parameter, double value,
                                 Consumer<Rules> tweak, int n, long baseSeed) {
         List<GameResult> results = new ArrayList<>(n);
@@ -50,12 +42,11 @@ public class BatchRunner {
         return results;
     }
 
-    /** Juega una única partida completa y devuelve sus métricas. */
     public GameResult playOne(String experiment, String parameter, double value,
                               Consumer<Rules> tweak, long seed) {
         Rules rules = new Rules();
         rules.randomSeed = seed;
-        rules.maxTurns = maxTurnsPerGame;
+        rules.tMax = maxTurnsPerGame;
         tweak.accept(rules);
 
         GameState state = ScenarioLoader.fromJson(scenarioJson, rules);
@@ -66,11 +57,11 @@ public class BatchRunner {
         TurnReport last = null;
         while (!engine.isGameOver()) {
             for (Nation nation : state.livingNations()) {
-                agent.plan(engine, nation); // todas las naciones juegan con la IA
+                agent.plan(engine, nation);
             }
             last = engine.endTurn();
             for (String event : last.events()) {
-                if (event.startsWith("¡Revuelta")) {
+                if (event.contains("insolvencia") || event.contains("INSOLVENCIA")) {
                     revolts++;
                 }
             }

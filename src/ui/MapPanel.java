@@ -167,9 +167,9 @@ public class MapPanel extends JPanel {
             return province.name() + " (zona marítima)";
         }
         String owner = province.isNeutral() ? "neutral" : state.nation(province.ownerId()).name();
-        return String.format("<html><b>%s</b> — %s<br>población: %,d · felicidad: %.0f%% · tropas: %d%s</html>",
-                province.name(), owner, province.population(), province.happiness(),
-                province.troops(), province.isFortified() ? " · fortificada" : "");
+        return String.format("<html><b>%s</b> — %s<br>poblacion: %,d · descontento: %.0f%% · tropas: %d · fort: %d</html>",
+                province.name(), owner, province.population(), province.discontent(),
+                province.troops(), province.fortification());
     }
 
     @Override
@@ -228,10 +228,10 @@ public class MapPanel extends JPanel {
             }
             if (!province.isNeutral()
                     && province.id().equals(state.nation(province.ownerId()).kingProvinceId())) {
-                info.append(" ♔");
+                info.append(" K");
             }
-            if (province.isFortified()) {
-                info.append(" ⛨");
+            if (province.fortification() > 0) {
+                info.append(" F").append(province.fortification());
             }
             g2.setFont(getFont().deriveFont(Font.BOLD, 14f));
             drawCentered(g2, info.toString(), centerX, centerY + 12);

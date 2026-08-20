@@ -5,8 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Una nación (facción) de la partida: tesoro, puntos de acción, ubicación del
- * rey y relaciones diplomáticas con las demás naciones.
+ * Una nación (facción) de la partida: tesoro, ubicación del rey y
+ * relaciones diplomáticas con las demás naciones.
  */
 public class Nation {
 
@@ -15,8 +15,7 @@ public class Nation {
     private final boolean ai;
 
     private double gold;
-    private double actionPoints;
-    private int taxRate = 100; // % sobre la recaudación base; solo cambia en temporada fiscal
+    private int taxRate = 100; // % sobre la recaudación base
     private String kingProvinceId; // null = el rey ha muerto (o la regla está desactivada)
     private boolean eliminated;
     private final Map<String, DiplomaticState> relations = new HashMap<>();
@@ -48,14 +47,6 @@ public class Nation {
 
     public void setGold(double gold) {
         this.gold = gold; // puede ser negativa: deuda (espiral documentada en el juego real)
-    }
-
-    public double actionPoints() {
-        return actionPoints;
-    }
-
-    public void setActionPoints(double actionPoints) {
-        this.actionPoints = Math.max(0, actionPoints);
     }
 
     /** Tasa impositiva actual (%). La validez del valor la controla el motor. */
@@ -111,6 +102,6 @@ public class Nation {
 
     @Override
     public String toString() {
-        return id + " (oro=" + gold + ", AP=" + actionPoints + ")";
+        return id + " (oro=" + gold + ", tasa=" + taxRate + "%)";
     }
 }

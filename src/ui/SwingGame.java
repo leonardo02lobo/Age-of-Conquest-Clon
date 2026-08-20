@@ -251,7 +251,7 @@ public class SwingGame {
         }
         JSpinner spinner = new JSpinner(new SpinnerNumberModel(
                 from.troops(), 1, from.troops(), 1));
-        JCheckBox withKing = new JCheckBox("Llevar al rey (+30% en combate)");
+        JCheckBox withKing = new JCheckBox("Llevar al rey");
         withKing.setEnabled(from.id().equals(currentHuman.kingProvinceId()));
 
         JPanel panel = new JPanel(new GridLayout(0, 1, 4, 4));
@@ -303,15 +303,12 @@ public class SwingGame {
     }
 
     private void taxDialog() {
-        JComboBox<Integer> combo = new JComboBox<>();
-        for (int rate : state.rules().allowedTaxRates) {
-            combo.addItem(rate);
-        }
-        combo.setSelectedItem(currentHuman.taxRate());
-        int option = JOptionPane.showConfirmDialog(frame, combo, "Tasa impositiva (%)",
+        JSpinner spinner = new JSpinner(new SpinnerNumberModel(
+                currentHuman.taxRate(), 0, state.rules().thetaMax, 5));
+        int option = JOptionPane.showConfirmDialog(frame, spinner, "Tasa impositiva (%)",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (option == JOptionPane.OK_OPTION) {
-            submit(new Order.SetTaxRate(currentHuman.id(), (Integer) combo.getSelectedItem()));
+            submit(new Order.SetTaxRate(currentHuman.id(), (Integer) spinner.getValue()));
         }
     }
 
@@ -340,8 +337,7 @@ public class SwingGame {
     // ------------------------------------------------------------- refrescos
 
     private void refreshPanels() {
-        turnLabel.setText("Turno " + state.turn()
-                + (state.rules().isTaxSeason(state.turn()) ? "  ·  temporada fiscal" : ""));
+        turnLabel.setText("Turno " + state.turn());
         if (currentHuman == null) {
             nationLabel.setText("Modo espectador (solo IA)");
             nationLabel.setBackground(Color.DARK_GRAY);
@@ -356,8 +352,8 @@ public class SwingGame {
             nationLabel.setBackground(mapPanel.colorOf(currentHuman.id()));
             nationLabel.setForeground(Color.WHITE);
             statsLabel.setText(String.format(
-                    "<html>Oro: <b>%.1f</b> · AP: <b>%.1f</b><br>Impuestos: %d%% · Tropas: %d<br>Rey en: %s</html>",
-                    currentHuman.gold(), currentHuman.actionPoints(), currentHuman.taxRate(),
+                    "<html>Oro: <b>%.1f</b><br>Impuestos: %d%% · Tropas: %d<br>Rey en: %s</html>",
+                    currentHuman.gold(), currentHuman.taxRate(),
                     state.totalTroops(currentHuman.id()),
                     currentHuman.kingProvinceId() == null ? "(muerto)"
                             : state.province(currentHuman.kingProvinceId()).name()));
@@ -380,13 +376,12 @@ public class SwingGame {
         }
         String owner = province.isNeutral() ? "neutral" : state.nation(province.ownerId()).name();
         provinceLabel.setText(String.format(
-                "<html><b>%s</b> — %s<br>Población: %,d<br>Felicidad: %.0f%%<br>Tropas: %d%s%s</html>",
-                province.name(), owner, province.population(), province.happiness(),
-                province.troops(),
-                province.isFortified() ? "<br>⛨ fortificada" : "",
+                "<html><b>%s</b> — %s<br>Poblacion: %,d<br>Descontento: %.0f%%<br>Tropas: %d<br>Fort: %d/%d%s</html>",
+                province.name(), owner, province.population(), province.discontent(),
+                province.troops(), province.fortification(), state.rules().phiMax,
                 !province.isNeutral()
                         && province.id().equals(state.nation(province.ownerId()).kingProvinceId())
-                        ? "<br>♔ sede del rey" : ""));
+                        ? " · Rey" : ""));
     }
 
     private void log(String line) {

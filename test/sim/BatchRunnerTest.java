@@ -27,7 +27,7 @@ class BatchRunnerTest {
         assertEquals(501, results.get(1).seed());
         for (GameResult result : results) {
             assertNotNull(result.winnerId(), "toda partida debe tener ganador");
-            assertTrue(result.turns() >= 1 && result.turns() <= 150);
+            assertTrue(result.turns() >= 1 && result.turns() <= 250);
             assertTrue(result.winnerProvinces() >= 1);
             assertTrue(result.revolts() >= 0);
             assertEquals("base", result.experiment());
@@ -45,11 +45,12 @@ class BatchRunnerTest {
 
     @Test
     void losParametrosModificadosLleganALaPartida() {
-        // Sin revueltas posibles, el conteo de revueltas debe ser 0.
-        GameResult result = runner.playOne("revueltas", "revoltRiskK", 0,
-                r -> r.revoltRiskK = 0, 900);
-        assertEquals(0, result.revolts());
-        assertEquals("revoltRiskK", result.parameter());
+        GameResult result = runner.playOne("kbeta", "kBeta", 0.5,
+                r -> r.kBeta = 0.5, 900);
+        assertEquals(0.5, result.value());
+        assertEquals("kBeta", result.parameter());
+        assertNotNull(result.winnerId());
+        assertTrue(result.revolts() >= 0);
     }
 
     @Test

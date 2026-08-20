@@ -99,19 +99,6 @@ class ScenarioLoaderTest {
     }
 
     @Test
-    void losPuntosDeAccionInicialesSiguenLaFormula() {
-        // Imperio Romano: 4 provincias -> 3 + 0.5·4 = 5 AP
-        assertEquals(5.0, europa.nation("imperio_romano").actionPoints(), 1e-9);
-        // Grecia: 3 provincias -> 4.5 AP
-        assertEquals(4.5, europa.nation("grecia").actionPoints(), 1e-9);
-    }
-
-    @Test
-    void laFelicidadInicialEsLaPorDefecto() {
-        assertEquals(europa.rules().initialHappiness, europa.province("roma").happiness());
-    }
-
-    @Test
     void todasLasProvinciasDeEuropaTraenPoligono() {
         for (Province p : europa.provinces()) {
             assertTrue(p.polygon() != null && p.polygon().length >= 6

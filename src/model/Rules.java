@@ -1,168 +1,191 @@
 package model;
 
 /**
- * Parámetros calibrables del modelo de simulación (ver PLAN.md §5.3).
+ * Parámetros calibrables del modelo de simulación (tabla §1.2 del modelo formal).
  *
- * Age of Conquest IV no publica varias de sus fórmulas exactas; estos valores
- * son decisiones de modelado propias y constituyen los factores a variar en
- * los experimentos de simulación (análisis de sensibilidad).
+ * Todos los valores coinciden con los definidos en Parcial_II_Parametros_y_Eventos.md.
+ * La IA usa estos parámetros vía la tabla 1.9 de estrategias.
  */
 public class Rules {
 
-    /** Puntos de acción base por turno. */
-    public double apBase = 3.0;
+    // ----------------------------------------------- Subsistema económico (§2.4.2)
 
-    /** Puntos de acción adicionales por provincia controlada. */
-    public double apPerProvince = 0.5;
+    /** ι — renta unitaria a tasa 100% [oro/(hab·turno)]. */
+    public double iota = 0.01;
 
-    /** Bono de combate si el rey lucha con las tropas (+30%, documentado del juego real). */
-    public double kingCombatBonus = 0.30;
+    /** β_φ — bonificación de renta por fortificación [1/nivel]. */
+    public double betaPhi = 0.05;
 
-    /** Bono del defensor en provincia fortificada (+50%, documentado del juego real). */
-    public double fortDefenseBonus = 0.50;
+    /** c_adm — coste administrativo por provincia [oro/(prov·turno)]. */
+    public double cAdm = 2.0;
 
-    /** Factor de desgaste del ganador en combate (φ del modelo Lanchester discreto). */
-    public double combatAttrition = 0.70;
+    /** c_up — mantenimiento militar unitario [oro/(unidad·turno)]. */
+    public double cUp = 0.05;
 
-    /** Población máxima por provincia (documentado: 1 millón). */
-    public long maxPopulation = 1_000_000;
+    /** c_u — coste de reclutamiento [oro/unidad]. */
+    public double cU = 1.5;
 
-    /** Oro máximo por provincia y turno con población llena y tasa 100% (documentado: 250). */
-    public double maxTaxGoldPerProvince = 250.0;
+    /** c_φ — coste de un nivel de fortificación [oro/nivel]. */
+    public double cPhi = 40.0;
 
-    /** Soldados mantenidos por cada 1 de oro por turno (documentado: ~20). */
-    public int troopsPerUpkeepGold = 20;
+    /** θ_max — tasa impositiva máxima [%]. */
+    public int thetaMax = 150;
 
-    /** Tasa de crecimiento poblacional por turno (no documentada; calibrable). */
-    public double populationGrowth = 0.015;
+    /** θ_0 — tasa fiscalmente neutra [%]. */
+    public int theta0 = 50;
 
-    /** Constante k del riesgo de revuelta: P = min(0.9, k·(50−felicidad)²). */
-    public double revoltRiskK = 4e-4;
+    // -------------------------------------------------------- Descontento (§2.4.3)
 
-    /** Umbral de felicidad bajo el cual la provincia no paga impuestos y puede rebelarse. */
-    public double happinessRevoltThreshold = 50.0;
+    /** η_θ — sensibilidad a la presión fiscal [pts/(turno·%)]. */
+    public double etaTheta = 0.06;
 
-    /** Felicidad inicial de las provincias si el escenario no la especifica. */
-    public double initialHappiness = 75.0;
+    /** η_w — descontento por estado de guerra [pts/turno]. */
+    public double etaW = 2.0;
 
-    // ------------------------------------------------ costes de las órdenes (M2)
+    /** η_n — descontento por sobreextensión [pts/(turno·prov)]. */
+    public double etaN = 0.5;
 
-    /** Coste en AP de mover un ejército. */
-    public double apCostMove = 0.5;
+    /** n* — umbral administrativo de provincias. */
+    public int nStar = 8;
 
-    /** Coste en AP de reclutar en una provincia. */
-    public double apCostRecruit = 0.5;
+    /** η_r — recuperación base [pts/turno]. */
+    public double etaR = 1.5;
 
-    /** Coste en AP de fortificar una provincia (documentado del juego real: 0.5). */
-    public double apCostFortify = 0.5;
+    /** D* — umbral fiscal de descontento [puntos]. income = 0 cuando D_p ≥ D*. */
+    public double dStar = 60.0;
 
-    /** Coste en AP de declarar la guerra. */
-    public double apCostDeclareWar = 0.5;
+    // ----------------------------------------------------------- Moral (§2.4.4)
 
-    /** Coste en oro de fortificar una provincia. */
-    public double goldCostFortify = 20.0;
+    /** μ_min — moral mínima. */
+    public double muMin = 0.40;
 
-    /** Coste en oro por soldado reclutado. */
-    public double recruitGoldPerSoldier = 0.1;
+    /** λ_d — decaimiento por distancia [1/provincia]. */
+    public double lambdaD = 0.06;
 
-    /** Habitantes que consume cada soldado reclutado. */
-    public double recruitPopulationPerSoldier = 2.0;
+    /** ρ_μ — regeneración por turno [1/turno]. */
+    public double rhoMu = 0.10;
 
-    // ------------------------------------------------ economía por turno (M3)
+    /** γ_μ — desgaste por bajas. */
+    public double gammaMu = 0.50;
 
-    /** Oro de administración por provincia y turno. */
-    public double adminGoldPerProvince = 1.0;
+    // ----------------------------------------------------------- Combate (§2.4.5)
 
-    /** Recuperación base de felicidad por turno. */
-    public double happinessBaseRecovery = 1.0;
+    /** K_B — coeficiente de bajas. */
+    public double kBeta = 0.70;
 
-    /**
-     * Felicidad por turno según la tasa impositiva: (100 − tasa) · este factor.
-     * Con 0.04: tasa 0% → +4, 100% → 0, 200% → −4.
-     */
-    public double taxHappinessPerPoint = 0.04;
+    /** β_F — bonificación defensiva por fortificación [1/nivel]. */
+    public double betaF = 0.15;
 
-    /** Pérdida de felicidad por turno mientras se está en guerra. */
-    public double warUnhappiness = 2.0;
+    /** Φ_max — nivel máximo de fortificación. */
+    public int phiMax = 4;
 
-    /** Tasas impositivas permitidas (documentadas del juego real). */
-    public int[] allowedTaxRates = {0, 50, 100, 150, 200};
+    /** F_min — fuerza mínima viable [unidades de fuerza]. */
+    public int fMin = 5;
 
-    /** La tasa solo puede cambiarse en la temporada fiscal: turnos 1, 1+N, 1+2N… */
-    public int taxSeasonInterval = 5;
+    /** g_ref — guarnición de referencia [unidades de fuerza]. */
+    public int gRef = 50;
 
-    /** Probabilidad máxima de revuelta por turno. */
-    public double revoltMaxChance = 0.9;
+    // -------------------------------------------------- Población y terminación (§2.4.8)
 
-    /** Factor de supresión de revueltas si la provincia tiene guarnición (≥1 soldado). */
-    public double revoltGarrisonSuppression = 0.5;
+    /** g_L — tasa crecimiento poblacional [1/turno]. */
+    public double gL = 0.01;
 
-    /** Milicia rebelde al triunfar una revuelta: habitantes · este factor (mínimo 1). */
-    public double rebelsPerPopulation = 0.0002;
+    /** L_max — población máxima por provincia [habitantes]. */
+    public long lMax = 20_000;
 
-    /** Felicidad de la provincia tras una revuelta triunfante. */
-    public double revoltHappinessAfter = 60.0;
+    /** ϱ — habitantes destruidos por baja [habitantes/unidad]. */
+    public double rho = 2.0;
 
-    /** Semilla del generador aleatorio (reproducibilidad de los experimentos). */
-    public long randomSeed = 20260705L;
+    /** Θ_V — cuota de victoria. */
+    public double thetaV = 0.60;
 
-    // ----------------------------------------------- saqueo y decretos (M3)
+    /** t_max — límite de turnos. */
+    public int tMax = 200;
 
-    /** Coste en AP de saquear una provincia (documentado del juego real: 1). */
-    public double apCostPillage = 1.0;
+    /** θ_am — cuota que dispara coalición. */
+    public double thetaAm = 0.40;
 
-    /** Fracción de la población destruida por un saqueo. */
-    public double pillagePopulationLoss = 0.20;
+    /** ς_h — histéresis disolución alianzas. */
+    public double sigmaH = 0.05;
 
-    /** Oro obtenido por habitante destruido al saquear. */
-    public double pillageGoldPerInhabitant = 0.001;
+    // --------------------------------------------------- Movimiento (§2.4.8)
 
-    /** Felicidad perdida por la provincia saqueada. */
-    public double pillageHappinessLoss = 30.0;
+    /** v_a — puntos de movimiento base [provincias/turno]. */
+    public double vA = 1.5;
 
-    /** Decreto "repartir dinero": +10 de felicidad (documentado). */
-    public double apCostDecreeShare = 0.5;
-    public double goldCostDecreeShare = 10.0;
-    public double decreeShareHappiness = 10.0;
+    /** g_ret — guarnición de reserva capital [unidades de fuerza]. */
+    public int gRet = 30;
 
-    /** Decreto "fiesta de inauguración": 25 de oro y +20 de felicidad (documentados). */
-    public double apCostDecreeParty = 0.2;
-    public double goldCostDecreeParty = 25.0;
-    public double decreePartyHappiness = 20.0;
+    /** A_max — ejércitos simultáneos. */
+    public int aMax = 4;
 
-    /** Festival de fertilidad: +20% de población de una vez (documentado; 0.5 AP). */
-    public double apCostFestival = 0.5;
-    public double goldCostFestival = 15.0;
-    public double festivalPopulationBoost = 0.20;
+    // --------------------------------------------------- IA estratégica (§2.4.9)
 
-    // -------------------------------------------------------- reglas de partida
+    /** Tipo de estrategia de IA para cada nación. */
+    public enum Strategy { AGRESIVA, DEFENSIVA, ECONOMICA, EQUILIBRADA }
 
-    /**
-     * Fracción del territorio que se pierde al morir el rey (documentado del
-     * juego real: ~90%). Con 1.0 la muerte del rey elimina a la nación.
-     */
-    public double kingDeathTerritoryLoss = 0.9;
-
-    /** Límite de turnos de la partida; 0 = sin límite (gana el último en pie). */
-    public int maxTurns = 0;
-
-    /** Puntos de acción disponibles para una nación con {@code provinceCount} provincias. */
-    public double actionPointsFor(int provinceCount) {
-        return apBase + apPerProvince * provinceCount;
+    /** Tasa impositiva objetivo por estrategia (θ_σ). */
+    public int taxRateForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 125;
+            case DEFENSIVA -> 100;
+            case ECONOMICA -> 0;  // se calcula adaptativamente con θ_eq
+            case EQUILIBRADA -> 0; // se calcula adaptativamente
+        };
     }
 
-    /** ¿Es temporada fiscal (se puede cambiar la tasa impositiva) en este turno? */
-    public boolean isTaxSeason(int turn) {
-        return (turn - 1) % taxSeasonInterval == 0;
+    /** Fracción tesoro a reclutar (f_rec). */
+    public double fRecForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 0.90;
+            case DEFENSIVA -> 0.60;
+            case ECONOMICA -> 0.30;
+            case EQUILIBRADA -> 0.70;
+        };
     }
 
-    /** ¿Está permitida esta tasa impositiva? */
-    public boolean isAllowedTaxRate(int rate) {
-        for (int allowed : allowedTaxRates) {
-            if (allowed == rate) {
-                return true;
-            }
-        }
-        return false;
+    /** Ventaja mínima para atacar (γ_atq). */
+    public double gammaAtqForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 1.1;
+            case DEFENSIVA -> 1.8;
+            case ECONOMICA -> 2.0;
+            case EQUILIBRADA -> 1.4;
+        };
     }
+
+    /** Superioridad para declarar guerra (γ_σ). */
+    public double gammaSigmaForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 1.2;
+            case DEFENSIVA -> 2.5;
+            case ECONOMICA -> 3.0;
+            case EQUILIBRADA -> 1.8;
+        };
+    }
+
+    /** Fracción fuerza retenida en guarnición (f_gua). */
+    public double fGuaForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 0.15;
+            case DEFENSIVA -> 0.50;
+            case ECONOMICA -> 0.40;
+            case EQUILIBRADA -> 0.30;
+        };
+    }
+
+    /** Prioridad de fortificación (f_fort). */
+    public double fFortForStrategy(Strategy s) {
+        return switch (s) {
+            case AGRESIVA -> 0.05;
+            case DEFENSIVA -> 0.40;
+            case ECONOMICA -> 0.25;
+            case EQUILIBRADA -> 0.20;
+        };
+    }
+
+    // --------------------------------------------------------- Semilla
+
+    /** Semilla del generador LCG (reproducibilidad). */
+    public long randomSeed = 20260805L;
 }

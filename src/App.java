@@ -47,16 +47,16 @@ public class App {
         System.out.println();
 
         for (Nation nation : state.nations()) {
-            System.out.printf("%s%s — oro: %.0f, AP: %.1f, tropas: %d%n",
+            System.out.printf("%s%s — oro: %.0f, tasa: %d%%, tropas: %d%n",
                     nation.name(),
                     nation.isAI() ? " [IA]" : "",
                     nation.gold(),
-                    nation.actionPoints(),
+                    nation.taxRate(),
                     state.totalTroops(nation.id()));
             for (Province p : state.provincesOf(nation.id())) {
                 String king = p.id().equals(nation.kingProvinceId()) ? " ♔" : "";
-                System.out.printf("    %-18s pob: %,8d  felicidad: %3.0f%%  tropas: %3d%s%n",
-                        p.name(), p.population(), p.happiness(), p.troops(), king);
+                System.out.printf("    %-18s pob: %,8d  descontento: %3.0f%%  tropas: %3d  fort: %d%s%n",
+                        p.name(), p.population(), p.discontent(), p.troops(), p.fortification(), king);
             }
             System.out.println();
         }

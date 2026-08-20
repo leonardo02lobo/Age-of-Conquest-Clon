@@ -6,8 +6,10 @@ import java.util.Set;
 
 /**
  * Una provincia del mapa: la unidad territorial básica, tipo Risk.
- * Puede ser tierra (con población, felicidad, dueño y guarnición) o una zona
+ * Puede ser tierra (con población, descontento, dueño y guarnición) o una zona
  * marítima (solo transitable por tropas embarcadas; sin población ni dueño).
+ *
+ * Campo clave del modelo formal: D_p (descontento) ∈ [0, 100], inicial D_0 = 20.
  */
 public class Province {
 
@@ -16,12 +18,13 @@ public class Province {
     private final boolean water;
     private final Set<String> adjacent = new LinkedHashSet<>();
 
-    private long population;   // habitantes (siempre 0 en zonas marítimas)
-    private double happiness;  // 0..100, solo relevante en tierra
-    private boolean fortified;
-    private String ownerId;    // id de la nación dueña; null = neutral
-    private int troops;        // guarnición actual (neutral o del dueño)
-    private int[] polygon;     // vértices [x1,y1, x2,y2, …] para la interfaz gráfica (opcional)
+    private long population;
+    private double discontent;    // D_p ∈ [0, 100], inicial D_0 = 20
+    private int fortification;    // φ_p ∈ {0, 1, …, Φ_max=4}, niveles enteros
+    private String ownerId;       // null = neutral
+    private int troops;           // guarnición actual
+    private TerrainType terrain;  // tipo de terreno (default: LLANURA)
+    private int[] polygon;
 
     public Province(String id, String name, boolean water) {
         if (id == null || id.isBlank()) {
@@ -30,26 +33,18 @@ public class Province {
         this.id = id;
         this.name = (name == null || name.isBlank()) ? id : name;
         this.water = water;
+        this.terrain = TerrainType.LLANURA;
+        this.discontent = 20.0; // D_0 según tabla §1.1
     }
 
-    public String id() {
-        return id;
-    }
+    public String id() { return id; }
+    public String name() { return name; }
+    public boolean isWater() { return water; }
 
-    public String name() {
-        return name;
-    }
-
-    public boolean isWater() {
-        return water;
-    }
-
-    /** Ids de las provincias adyacentes (grafo no dirigido; siempre simétrico tras la carga). */
     public Set<String> adjacent() {
         return Collections.unmodifiableSet(adjacent);
     }
 
-    /** Añade una adyacencia (solo en una dirección; la simetría la garantiza el cargador). */
     public void addAdjacent(String provinceId) {
         if (provinceId.equals(id)) {
             throw new IllegalArgumentException("La provincia '" + id + "' no puede ser adyacente a sí misma");
@@ -57,9 +52,9 @@ public class Province {
         adjacent.add(provinceId);
     }
 
-    public long population() {
-        return population;
-    }
+    // ------------------------------------------------------------------ población
+
+    public long population() { return population; }
 
     public void setPopulation(long population) {
         if (water && population > 0) {
@@ -68,34 +63,41 @@ public class Province {
         this.population = Math.max(0, population);
     }
 
-    public double happiness() {
-        return happiness;
+    // ---------------------------------------------------------- descontento (D_p)
+
+    /** Descontento provincial D_p ∈ [0, 100]. Mayor = más descontento. */
+    public double discontent() { return discontent; }
+
+    /** Fija el descontento, acotado a [0, 100]. */
+    public void setDiscontent(double discontent) {
+        this.discontent = Math.clamp(discontent, 0.0, 100.0);
     }
 
-    /** Fija la felicidad, acotada al rango [0, 100]. */
-    public void setHappiness(double happiness) {
-        this.happiness = Math.clamp(happiness, 0.0, 100.0);
+    /**
+     * Felicidad derivada para la UI: 100 − D_p.
+     * No se usa en el cálculo del modelo; es solo presentación.
+     */
+    public double happiness() { return 100.0 - discontent; }
+
+    // ----------------------------------------------------- fortificación (φ_p)
+
+    /**
+     * Nivel de fortificación φ_p ∈ {0, 1, …, Φ_max}.
+     * La función de fortificación es Φ(φ) = 1 + β_F · φ (ec. 3.16).
+     */
+    public int fortification() { return fortification; }
+
+    public void setFortification(int fortification) {
+        this.fortification = Math.clamp(fortification, 0, 4);
     }
 
-    public boolean isFortified() {
-        return fortified;
-    }
+    /** Método de compatibilidad: ¿está fortificada (nivel ≥ 1)? */
+    public boolean isFortified() { return fortification >= 1; }
 
-    public void setFortified(boolean fortified) {
-        if (water && fortified) {
-            throw new IllegalStateException("La zona marítima '" + id + "' no puede fortificarse");
-        }
-        this.fortified = fortified;
-    }
+    // ------------------------------------------------------------------ dueño
 
-    /** Id de la nación dueña, o {@code null} si la provincia es neutral. */
-    public String ownerId() {
-        return ownerId;
-    }
-
-    public boolean isNeutral() {
-        return ownerId == null;
-    }
+    public String ownerId() { return ownerId; }
+    public boolean isNeutral() { return ownerId == null; }
 
     public void setOwnerId(String ownerId) {
         if (water && ownerId != null) {
@@ -104,18 +106,25 @@ public class Province {
         this.ownerId = ownerId;
     }
 
-    public int troops() {
-        return troops;
-    }
+    // ------------------------------------------------------------------ tropas
+
+    public int troops() { return troops; }
 
     public void setTroops(int troops) {
         this.troops = Math.max(0, troops);
     }
 
-    /** Vértices del polígono del mapa ([x1,y1, x2,y2, …]), o {@code null} si el escenario no los define. */
-    public int[] polygon() {
-        return polygon;
+    // --------------------------------------------------------------- terreno
+
+    public TerrainType terrain() { return terrain; }
+
+    public void setTerrain(TerrainType terrain) {
+        this.terrain = terrain == null ? TerrainType.LLANURA : terrain;
     }
+
+    // ---------------------------------------------------------------- polígono
+
+    public int[] polygon() { return polygon; }
 
     public void setPolygon(int[] polygon) {
         if (polygon != null && (polygon.length < 6 || polygon.length % 2 != 0)) {
@@ -127,6 +136,7 @@ public class Province {
 
     @Override
     public String toString() {
-        return id + (water ? " [agua]" : " [" + (ownerId == null ? "neutral" : ownerId) + ", tropas=" + troops + "]");
+        return id + (water ? " [agua]" : " [" + (ownerId == null ? "neutral" : ownerId)
+                + ", tropas=" + troops + ", φ=" + fortification + ", D=" + discontent + "]");
     }
 }

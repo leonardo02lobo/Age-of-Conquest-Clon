@@ -18,7 +18,6 @@ import model.Province;
  */
 public class ConsoleGame {
 
-    /** Tope de seguridad para partidas donde solo juegan IAs. */
     private static final int MAX_CONSOLE_TURNS = 1000;
 
     private final TurnEngine engine;
@@ -41,7 +40,7 @@ public class ConsoleGame {
             System.out.println("──────── Turno " + state.turn() + " ────────");
             for (Nation nation : state.livingNations()) {
                 if (nation.isAI()) {
-                    System.out.println("(IA) " + nation.name() + " planifica sus órdenes…");
+                    System.out.println("(IA) " + nation.name() + " planifica...");
                     aiAgent.plan(engine, nation);
                 } else if (!planningPhase(nation)) {
                     System.out.println("Partida interrumpida.");
@@ -60,27 +59,19 @@ public class ConsoleGame {
         }
     }
 
-    /** Fase de planificación de una nación. Devuelve false si se agotó la entrada. */
     private boolean planningPhase(Nation nation) {
         System.out.println();
-        String season = state.rules().isTaxSeason(state.turn()) ? " — ¡temporada fiscal!" : "";
-        System.out.printf("Turno de %s — oro: %.1f, AP: %.1f, impuestos: %d%%%s%n",
-                nation.name(), nation.gold(), nation.actionPoints(), nation.taxRate(), season);
+        System.out.printf("Turno de %s — oro: %.1f, impuestos: %d%%%n",
+                nation.name(), nation.gold(), nation.taxRate());
         while (true) {
             System.out.print(nation.id() + "> ");
-            if (!in.hasNextLine()) {
-                return false;
-            }
+            if (!in.hasNextLine()) return false;
             String line = in.nextLine().trim();
-            if (line.isEmpty()) {
-                continue;
-            }
+            if (line.isEmpty()) continue;
             String[] parts = line.split("\\s+");
             try {
                 switch (parts[0].toLowerCase(Locale.ROOT)) {
-                    case "fin" -> {
-                        return true;
-                    }
+                    case "fin" -> { return true; }
                     case "ayuda" -> printHelp();
                     case "mapa" -> printMap();
                     case "nacion" -> printNation(nation);
@@ -102,25 +93,10 @@ public class ConsoleGame {
                     }
                     case "guerra" -> {
                         engine.submit(new Order.DeclareWar(nation.id(), arg(parts, 1)));
-                        System.out.println("    ¡Guerra declarada!");
+                        System.out.println("    Guerra declarada!");
                     }
                     case "saquear" -> {
                         engine.submit(new Order.Pillage(nation.id(), arg(parts, 1)));
-                        System.out.println("    Orden registrada.");
-                    }
-                    case "repartir" -> {
-                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
-                                Order.DecreeType.REPARTIR));
-                        System.out.println("    Orden registrada.");
-                    }
-                    case "fiesta" -> {
-                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
-                                Order.DecreeType.FIESTA));
-                        System.out.println("    Orden registrada.");
-                    }
-                    case "festival" -> {
-                        engine.submit(new Order.Decree(nation.id(), arg(parts, 1),
-                                Order.DecreeType.FESTIVAL));
                         System.out.println("    Orden registrada.");
                     }
                     case "impuestos" -> {
@@ -131,11 +107,11 @@ public class ConsoleGame {
                     default -> System.out.println("    Comando desconocido; escribe 'ayuda'.");
                 }
             } catch (OrderException e) {
-                System.out.println("    ✗ " + e.getMessage());
+                System.out.println("    X " + e.getMessage());
             } catch (NumberFormatException e) {
-                System.out.println("    ✗ Cantidad inválida: se esperaba un número");
+                System.out.println("    X Cantidad invalida: se esperaba un numero");
             } catch (IllegalArgumentException e) {
-                System.out.println("    ✗ " + e.getMessage());
+                System.out.println("    X " + e.getMessage());
             }
         }
     }
@@ -149,29 +125,24 @@ public class ConsoleGame {
 
     private void printHelp() {
         System.out.println("""
-                    Comandos (los AP y el oro se descuentan al ordenar):
-                      mover <origen> <destino> <tropas> [rey]  ataca o refuerza (rey: +30% en combate)
-                      reclutar <provincia> <soldados>          consume oro y población
-                      fortificar <provincia>                   +50% defensivo permanente
-                      guerra <nacion>                          declara la guerra (efecto inmediato)
-                      saquear <provincia>                      población propia → oro (−felicidad)
-                      repartir <provincia>                     decreto: +10 de felicidad
-                      fiesta <provincia>                       decreto: +20 de felicidad
-                      festival <provincia>                     decreto: +20% de población
-                      impuestos <0|50|100|150|200>             solo en temporada fiscal
-                      mapa | nacion | ver <provincia>          información
-                      fin                                      termina tu planificación
+                    Comandos:
+                      mover <origen> <destino> <tropas> [rey]
+                      reclutar <provincia> <soldados>
+                      fortificar <provincia>  (sube un nivel, max 4)
+                      guerra <nacion>
+                      saquear <provincia>
+                      impuestos <0..150>  (cambia cada turno)
+                      mapa | nacion | ver <provincia>
+                      fin
                 """);
     }
 
     private void printMap() {
         for (Nation nation : state.nations()) {
-            if (nation.isEliminated()) {
-                continue;
-            }
-            System.out.printf("    %s%s — oro: %.1f, AP: %.1f, tropas: %d%n",
+            if (nation.isEliminated()) continue;
+            System.out.printf("    %s%s — oro: %.1f, tropas: %d%n",
                     nation.name(), nation.isAI() ? " [IA]" : "",
-                    nation.gold(), nation.actionPoints(), state.totalTroops(nation.id()));
+                    nation.gold(), state.totalTroops(nation.id()));
             for (Province p : state.provincesOf(nation.id())) {
                 System.out.println("        " + provinceLine(p, nation));
             }
@@ -185,9 +156,8 @@ public class ConsoleGame {
     }
 
     private void printNation(Nation nation) {
-        System.out.printf("    %s — oro: %.1f, AP: %.1f, tropas: %d, rey en: %s%n",
-                nation.name(), nation.gold(), nation.actionPoints(),
-                state.totalTroops(nation.id()),
+        System.out.printf("    %s — oro: %.1f, tropas: %d, rey en: %s%n",
+                nation.name(), nation.gold(), state.totalTroops(nation.id()),
                 nation.kingProvinceId() == null ? "(muerto)" : nation.kingProvinceId());
         for (Province p : state.provincesOf(nation.id())) {
             System.out.println("        " + provinceLine(p, nation));
@@ -197,20 +167,21 @@ public class ConsoleGame {
     private void printProvince(String id) {
         Province p = state.province(id);
         if (p.isWater()) {
-            System.out.println("    " + p.name() + " [zona marítima] — costas: "
-                    + String.join(", ", p.adjacent()));
+            System.out.println("    " + p.name() + " [zona maritima]");
             return;
         }
         Nation owner = p.ownerId() == null ? null : state.nation(p.ownerId());
         System.out.println("    " + provinceLine(p, owner));
         System.out.println("        dueño: " + (owner == null ? "neutral" : owner.name())
-                + ", adyacentes: " + String.join(", ", p.adjacent()));
+                + ", terreno: " + p.terrain()
+                + ", fortificacion: " + p.fortification() + "/" + state.rules().phiMax
+                + ", descontento: " + String.format("%.0f", p.discontent()));
     }
 
     private String provinceLine(Province p, Nation owner) {
-        String king = owner != null && p.id().equals(owner.kingProvinceId()) ? " ♔" : "";
-        String fort = p.isFortified() ? " ⛨" : "";
-        return String.format("%-18s (%s) pob: %,d  felicidad: %.0f%%  tropas: %d%s%s",
-                p.name(), p.id(), p.population(), p.happiness(), p.troops(), king, fort);
+        String king = owner != null && p.id().equals(owner.kingProvinceId()) ? " K" : "";
+        String fort = p.fortification() > 0 ? " F" + p.fortification() : "";
+        return String.format("%-18s (%s) pob: %,d  D: %.0f  tropas: %d%s%s",
+                p.name(), p.id(), p.population(), p.discontent(), p.troops(), king, fort);
     }
 }

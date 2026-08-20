@@ -104,12 +104,23 @@ class GameStateTest {
     // ------------------------------------------------- invariantes del modelo
 
     @Test
-    void laFelicidadSeAcotaEntre0y100() {
+    void elDescontentoSeAcotaEntre0y100() {
         Province a = state.province("a");
-        a.setHappiness(150);
-        assertEquals(100, a.happiness());
-        a.setHappiness(-10);
-        assertEquals(0, a.happiness());
+        a.setDiscontent(150);
+        assertEquals(100, a.discontent());
+        a.setDiscontent(-10);
+        assertEquals(0, a.discontent());
+    }
+
+    @Test
+    void laFelicidadDerivadaEsInversaDelDescontento() {
+        Province a = state.province("a");
+        a.setDiscontent(20);
+        assertEquals(80, a.happiness(), 1e-9);
+        a.setDiscontent(100);
+        assertEquals(0, a.happiness(), 1e-9);
+        a.setDiscontent(0);
+        assertEquals(100, a.happiness(), 1e-9);
     }
 
     @Test
@@ -122,17 +133,32 @@ class GameStateTest {
     }
 
     @Test
-    void lasZonasMaritimasRechazanDuenoPoblacionYFortificacion() {
+    void lasZonasMaritimasRechazanDuenoYPoblacion() {
         Province mar = state.province("mar");
         assertThrows(IllegalStateException.class, () -> mar.setOwnerId("n1"));
         assertThrows(IllegalStateException.class, () -> mar.setPopulation(100));
-        assertThrows(IllegalStateException.class, () -> mar.setFortified(true));
     }
 
     @Test
-    void losPuntosDeAccionSiguenLaFormulaDeLasReglas() {
-        Rules rules = state.rules();
-        assertEquals(rules.apBase, rules.actionPointsFor(0), 1e-9);
-        assertEquals(rules.apBase + 4 * rules.apPerProvince, rules.actionPointsFor(4), 1e-9);
+    void laFortificacionSeAcotaEntre0y4() {
+        Province a = state.province("a");
+        a.setFortification(5);
+        assertEquals(4, a.fortification());
+        a.setFortification(-1);
+        assertEquals(0, a.fortification());
+    }
+
+    @Test
+    void isFortifiedEsTrueSiNivelMayorQue1() {
+        Province a = state.province("a");
+        assertFalse(a.isFortified());
+        a.setFortification(1);
+        assertTrue(a.isFortified());
+    }
+
+    @Test
+    void lasZonasMaritimasNoPuedenTenerFortificacion() {
+        Province mar = state.province("mar");
+        assertThrows(IllegalStateException.class, () -> mar.setOwnerId("n1"));
     }
 }

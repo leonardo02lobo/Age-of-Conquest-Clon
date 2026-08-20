@@ -19,36 +19,21 @@ import model.GameState;
 import model.Nation;
 import model.Province;
 import model.Rules;
+import model.TerrainType;
 
 /**
- * Carga y valida escenarios en formato JSON (ver scenarios/europa_antigua.json).
+ * Carga y valida escenarios en formato JSON.
  *
- * Estructura esperada:
- * <pre>
- * {
- *   "nombre": "Europa Antigua",
- *   "provincias": [
- *     {"id": "roma", "nombre": "Roma", "poblacion": 800000,
- *      "adyacentes": ["etruria", "mar_tirreno"], "tropas": 0, "agua": false}
- *   ],
- *   "naciones": [
- *     {"id": "imperio_romano", "nombre": "Imperio Romano", "oro": 100, "ia": false,
- *      "rey": "roma", "provincias": {"roma": 100, "etruria": 40},
- *      "relaciones": {"cartago": "GUERRA"}}
- *   ]
- * }
- * </pre>
- *
- * Garantías tras la carga: ids únicos, grafo de adyacencia simétrico y conexo,
- * zonas marítimas sin población/dueño, reyes en provincia propia y relaciones
- * diplomáticas simétricas y sin conflictos.
+ * Estructura extendida con soporte para terreno y descontento:
+ *   {"id": "roma", "nombre": "Roma", "poblacion": 800000,
+ *    "terreno": "LLANURA", "descontento": 20,
+ *    "adyacentes": ["etruria"], "tropas": 100}
  */
 public final class ScenarioLoader {
 
     private ScenarioLoader() {
     }
 
-    /** Carga un escenario desde un archivo, con las reglas por defecto. */
     public static GameState load(Path path) throws IOException {
         return load(path, new Rules());
     }
@@ -57,7 +42,6 @@ public final class ScenarioLoader {
         return fromJson(Files.readString(path), rules);
     }
 
-    /** Carga un escenario desde una cadena JSON, con las reglas por defecto. */
     public static GameState fromJson(String json) {
         return fromJson(json, new Rules());
     }
@@ -104,13 +88,24 @@ public final class ScenarioLoader {
             if (water && population > 0) {
                 throw new ScenarioException("La zona marítima '" + id + "' no puede tener población");
             }
-            p.setPopulation(Math.min(population, rules.maxPopulation));
+            p.setPopulation(Math.min(population, rules.lMax));
 
+            // Terreno (default: LLANURA)
+            if (!water && obj.has("terreno")) {
+                try {
+                    p.setTerrain(TerrainType.valueOf(obj.get("terreno").getAsString().toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    throw new ScenarioException("Terreno inválido '" + obj.get("terreno").getAsString()
+                            + "' en '" + id + "' (use LLANURA, BOSQUE, MONTANA, COSTA)");
+                }
+            }
+
+            // Descontento inicial (default: D_0 = 20)
             if (!water) {
-                double happiness = obj.has("felicidad")
-                        ? obj.get("felicidad").getAsDouble()
-                        : rules.initialHappiness;
-                p.setHappiness(happiness);
+                double discontent = obj.has("descontento")
+                        ? obj.get("descontento").getAsDouble()
+                        : 20.0;
+                p.setDiscontent(discontent);
             }
 
             int troops = obj.has("tropas") ? obj.get("tropas").getAsInt() : 0;
@@ -135,13 +130,11 @@ public final class ScenarioLoader {
             provinces.put(id, p);
         }
 
-        // Adyacencias en una segunda pasada, cuando ya existen todos los ids.
+        // Adyacencias en segunda pasada
         for (JsonElement element : array) {
             JsonObject obj = element.getAsJsonObject();
             String id = obj.get("id").getAsString();
-            if (!obj.has("adyacentes")) {
-                continue;
-            }
+            if (!obj.has("adyacentes")) continue;
             for (JsonElement adj : obj.getAsJsonArray("adyacentes")) {
                 String adjId = adj.getAsString();
                 if (adjId.equals(id)) {
@@ -152,7 +145,6 @@ public final class ScenarioLoader {
                     throw new ScenarioException(
                             "Provincia desconocida '" + adjId + "' en los adyacentes de '" + id + "'");
                 }
-                // Basta declarar la arista en una dirección: se simetriza aquí.
                 provinces.get(id).addAdjacent(adjId);
                 other.addAdjacent(id);
             }
@@ -160,13 +152,12 @@ public final class ScenarioLoader {
 
         for (Province p : provinces.values()) {
             if (p.adjacent().isEmpty()) {
-                throw new ScenarioException("La provincia '" + p.id() + "' está aislada (sin adyacentes)");
+                throw new ScenarioException("La provincia '" + p.id() + "' está aislada");
             }
         }
         return provinces;
     }
 
-    /** El mapa debe ser un único grafo conexo: toda provincia alcanzable desde cualquier otra. */
     private static void requireConnectedMap(Map<String, Province> provinces) {
         Set<String> visited = new HashSet<>();
         Deque<String> pending = new ArrayDeque<>();
@@ -183,15 +174,14 @@ public final class ScenarioLoader {
         if (visited.size() != provinces.size()) {
             Set<String> unreachable = new HashSet<>(provinces.keySet());
             unreachable.removeAll(visited);
-            throw new ScenarioException("El mapa no es conexo; provincias inalcanzables desde '"
-                    + start + "': " + unreachable);
+            throw new ScenarioException("El mapa no es conexo; provincias inalcanzables: " + unreachable);
         }
     }
 
     // -------------------------------------------------------------- naciones
 
     private static Map<String, Nation> parseNations(JsonObject root,
-                                                    Map<String, Province> provinces, Rules rules) {
+                                                     Map<String, Province> provinces, Rules rules) {
         JsonArray array = requireArray(root, "naciones");
         if (array.isEmpty()) {
             throw new ScenarioException("El escenario no tiene naciones");
@@ -208,9 +198,10 @@ public final class ScenarioLoader {
             boolean ai = !obj.has("ia") || obj.get("ia").getAsBoolean();
             Nation nation = new Nation(id, optString(obj, "nombre"), ai);
             nation.setGold(obj.has("oro") ? obj.get("oro").getAsDouble() : 0);
+
             if (obj.has("tasa")) {
                 int rate = obj.get("tasa").getAsInt();
-                if (!rules.isAllowedTaxRate(rate)) {
+                if (rate < 0 || rate > rules.thetaMax) {
                     throw new ScenarioException("Tasa impositiva inválida para '" + id + "': " + rate);
                 }
                 nation.setTaxRate(rate);
@@ -224,11 +215,11 @@ public final class ScenarioLoader {
                 Province p = provinces.get(provinceId);
                 if (p == null) {
                     throw new ScenarioException(
-                            "La nación '" + id + "' referencia una provincia desconocida: '" + provinceId + "'");
+                            "La nación '" + id + "' referencia provincia desconocida: '" + provinceId + "'");
                 }
                 if (p.isWater()) {
                     throw new ScenarioException(
-                            "La nación '" + id + "' no puede poseer la zona marítima '" + provinceId + "'");
+                            "La nación '" + id + "' no puede poseer zona marítima '" + provinceId + "'");
                 }
                 if (p.ownerId() != null) {
                     throw new ScenarioException("La provincia '" + provinceId
@@ -248,29 +239,24 @@ public final class ScenarioLoader {
                 nation.setKingProvinceId(kingProvince);
             }
 
-            nation.setActionPoints(rules.actionPointsFor(owned.size()));
             nations.put(id, nation);
         }
         return nations;
     }
 
-    /** Relaciones en segunda pasada (todas las naciones ya existen), simetrizando y detectando conflictos. */
     private static void applyRelations(JsonArray array, GameState state) {
-        Map<String, DiplomaticState> declared = new LinkedHashMap<>(); // "a|b" (ordenado) -> estado
+        Map<String, DiplomaticState> declared = new LinkedHashMap<>();
         for (JsonElement element : array) {
             JsonObject obj = element.getAsJsonObject();
             String id = obj.get("id").getAsString();
-            if (!obj.has("relaciones")) {
-                continue;
-            }
+            if (!obj.has("relaciones")) continue;
             JsonObject relations = obj.getAsJsonObject("relaciones");
             for (String otherId : relations.keySet()) {
                 if (otherId.equals(id)) {
-                    throw new ScenarioException("La nación '" + id + "' declara una relación consigo misma");
+                    throw new ScenarioException("Relación consigo misma");
                 }
                 if (!state.hasNation(otherId)) {
-                    throw new ScenarioException("La nación '" + id
-                            + "' declara una relación con una nación desconocida: '" + otherId + "'");
+                    throw new ScenarioException("Nación desconocida '" + otherId + "' en relaciones de '" + id + "'");
                 }
                 DiplomaticState relation = parseState(relations.get(otherId).getAsString(), id, otherId);
                 String key = id.compareTo(otherId) < 0 ? id + "|" + otherId : otherId + "|" + id;
@@ -283,7 +269,7 @@ public final class ScenarioLoader {
         }
         for (Map.Entry<String, DiplomaticState> entry : declared.entrySet()) {
             String[] pair = entry.getKey().split("\\|");
-            state.setRelation(pair[0], pair[1], entry.getValue()); // fija ambos lados
+            state.setRelation(pair[0], pair[1], entry.getValue());
         }
     }
 
@@ -291,8 +277,8 @@ public final class ScenarioLoader {
         try {
             return DiplomaticState.valueOf(value.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new ScenarioException("Relación inválida '" + value + "' entre '" + nationA
-                    + "' y '" + nationB + "' (use GUERRA, NEUTRAL o ALIANZA)");
+            throw new ScenarioException("Relación inválida '" + value + "' entre '"
+                    + nationA + "' y '" + nationB + "' (use GUERRA, NEUTRAL o ALIANZA)");
         }
     }
 
